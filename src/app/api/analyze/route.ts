@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
-import Anthropic from "@anthropic-ai/sdk";
 import { AnalysisResponseSchema } from "@/lib/schema";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/prompt";
 import { getMockAnalysis } from "@/lib/mock";
 import { checkRateLimit } from "@/lib/rate-limit";
+
+// Force Node.js runtime — jsdom requires Node APIs
+export const runtime = "nodejs";
+export const maxDuration = 30;
+import { JSDOM } from "jsdom";
+import { Readability } from "@mozilla/readability";
+import Anthropic from "@anthropic-ai/sdk";
 
 const MAX_ARTICLE_WORDS = 9000;
 const MIN_EXTRACTED_WORDS = 50; // ~300 words threshold for meaningful content
