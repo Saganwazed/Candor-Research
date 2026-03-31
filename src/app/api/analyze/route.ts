@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const MAX_ARTICLE_WORDS = 9000;
 const MIN_EXTRACTED_WORDS = 50; // ~300 words threshold for meaningful content
@@ -80,42 +80,36 @@ async function analyzeWithAI(
   wasTruncated: boolean,
   retryCount = 0
 ): Promise<ReturnType<typeof AnalysisResponseSchema.parse>> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
   
   if (!apiKey) {
     // Use mock mode when no API key is configured
     return getMockAnalysis(articleText);
   }
 
-  const client = new Anthropic({ apiKey });
-
-  const message = await Promise.race([
-    client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    systemInstruction: SYSTEM_PROMPT,
+    generationConfig: {
       temperature: 0.2,
-      system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: "user",
-          content: buildUserPrompt(articleText, wasTruncated),
-        },
-      ],
-    }),
+      maxOutputTokens: 1024,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const result = await Promise.race([
+    model.generateContent(buildUserPrompt(articleText, wasTruncated)),
     new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("AI_TIMEOUT")), AI_INFERENCE_TIMEOUT_MS)
     ),
   ]);
 
-  const content = message.content[0];
-  if (content.type !== "text") {
-    throw new Error("Unexpected response type from AI");
-  }
+  const response = result.response;
+  const jsonText = response.text().trim();
 
-  // Strip any markdown fencing the model might add despite instructions
-  let jsonText = content.text.trim();
-  if (jsonText.startsWith("```")) {
-    jsonText = jsonText.replace(/^```(?:json)?\s*/, "").replace(/\s*```$/, "");
+  if (!jsonText) {
+    throw new Error("Unexpected empty response from AI");
   }
 
   try {
