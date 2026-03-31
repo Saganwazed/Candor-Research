@@ -244,14 +244,13 @@ export async function POST(request: NextRequest) {
       }
       console.error("Analysis error:", err);
       return NextResponse.json(
-        { error: `Something went wrong. Try again. Details: ${message}` },
+        { error: "Something went wrong. Try again." },
         { status: 500 }
       );
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Unknown error";
+  } catch {
     return NextResponse.json(
-      { error: `Invalid request. Details: ${message}` },
+      { error: "Invalid request." },
       { status: 400 }
     );
   }
