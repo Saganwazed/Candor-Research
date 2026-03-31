@@ -7,8 +7,6 @@ import { checkRateLimit } from "@/lib/rate-limit";
 // Force Node.js runtime — jsdom requires Node APIs
 export const runtime = "nodejs";
 export const maxDuration = 30;
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const MAX_ARTICLE_WORDS = 9000;
@@ -52,6 +50,9 @@ async function fetchAndExtractArticle(url: string): Promise<{ text: string; titl
     }
 
     const html = await response.text();
+    // Dynamic import to avoid crashing Vercel serverless functions
+    const { JSDOM } = await import("jsdom");
+    const { Readability } = await import("@mozilla/readability");
     const dom = new JSDOM(html, { url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
