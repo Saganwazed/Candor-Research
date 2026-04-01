@@ -8,23 +8,45 @@ import ReportSection from "@/components/ReportSection";
 import Disclaimer from "@/components/Disclaimer";
 
 export default function Home() {
-  const [isLoading, setIsLoading] = useState(false);
+  const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState("");
 
   async function handleAnalyze(mode: "url" | "text", value: string) {
-    setIsLoading(true);
+    setFetchStatus(mode === "url" ? "fetching" : "analyzing");
     setAnalysis(null);
     setError("");
 
     try {
+      let articleText = value;
+
+      if (mode === "url") {
+        const fetchRes = await fetch("/api/fetch-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: value }),
+        });
+
+        const fetchData = await fetchRes.json();
+
+        if (!fetchRes.ok) {
+          setError(
+            fetchData.error ||
+              "Could not retrieve article content. The site may block automated access."
+          );
+          setFetchStatus("");
+          return;
+        }
+
+        articleText = fetchData.content;
+        setFetchStatus("analyzing");
+      }
+
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          mode === "url" ? { mode, url: value } : { mode, text: value }
-        ),
-      });
+        body: JSON.stringify({ mode: "text", text: articleText }),
+        });
 
       const data = await response.json();
 
@@ -37,7 +59,7 @@ export default function Home() {
     } catch {
       setError("Could not connect to the server. Try again.");
     } finally {
-      setIsLoading(false);
+      setFetchStatus("");
     }
   }
 
@@ -52,23 +74,25 @@ export default function Home() {
       </header>
 
       {/* Input */}
-      <InputSection onAnalyze={handleAnalyze} isLoading={isLoading} />
+      <InputSection onAnalyze={handleAnalyze} isLoading={fetchStatus !== ""} />
 
       {/* Disclaimer — once per session, below input */}
       <Disclaimer />
 
       {/* Loading */}
-      {isLoading && <LoadingState />}
+      {fetchStatus !== "" && (
+        <LoadingState customMessage={fetchStatus === "fetching" ? "Fetching article\u2026" : undefined} />
+      )}
 
       {/* Error */}
-      {error && !isLoading && (
+      {error && fetchStatus === "" && (
         <div className="error-message" role="alert" id="api-error" style={{ marginTop: "48px" }}>
           {error}
         </div>
       )}
 
       {/* Report */}
-      {analysis && !isLoading && <ReportSection analysis={analysis} />}
+      {analysis && fetchStatus === "" && <ReportSection analysis={analysis} />}
     </main>
   );
 }

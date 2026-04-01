@@ -10,7 +10,11 @@ const LABELS = [
 
 const CYCLE_INTERVAL = 2000;
 
-export default function LoadingState() {
+interface LoadingStateProps {
+  customMessage?: string;
+}
+
+export default function LoadingState({ customMessage }: LoadingStateProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFading, setIsFading] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -36,10 +40,10 @@ export default function LoadingState() {
       <div className="spinner" aria-hidden="true" />
       <div className="loading-label">
         <span
-          className={`loading-label-text ${isFading ? "fading" : ""}`}
-          aria-label={LABELS[currentIndex]}
+          className={`loading-label-text ${!customMessage && isFading ? "fading" : ""}`}
+          aria-label={customMessage || LABELS[currentIndex]}
         >
-          {LABELS[currentIndex]}
+          {customMessage || LABELS[currentIndex]}
         </span>
       </div>
     </div>
