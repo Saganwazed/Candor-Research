@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NewsLens — AI-powered news bias detection",
+  title: "Candor — AI-powered news bias detection",
   description:
     "Paste a news article or URL. Get an instant bias report with direction analysis, credibility flags, and hidden agenda detection.",
 };

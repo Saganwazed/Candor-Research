@@ -7,14 +7,14 @@ export default function Disclaimer() {
 
   useEffect(() => {
     // Show disclaimer once per session
-    const dismissed = sessionStorage.getItem("newslens_disclaimer_seen");
+    const dismissed = sessionStorage.getItem("candor_disclaimer_seen");
     if (!dismissed) {
       setShow(true);
     }
   }, []);
 
   function handleDismiss() {
-    sessionStorage.setItem("newslens_disclaimer_seen", "true");
+    sessionStorage.setItem("candor_disclaimer_seen", "true");
     setShow(false);
   }
 
@@ -23,7 +23,7 @@ export default function Disclaimer() {
   return (
     <div className="content-warning report-reveal" role="note" aria-label="AI analysis disclaimer" id="disclaimer">
       <p className="content-warning-text">
-        NewsLens uses AI to analyze article text for bias signals, credibility
+        Candor uses AI to analyze article text for bias signals, credibility
         concerns, and persuasive framing. Results are generated automatically and
         should be treated as a starting point for critical reading, not a
         definitive verdict. AI analysis can miss context, misinterpret tone, or

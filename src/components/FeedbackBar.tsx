@@ -9,8 +9,8 @@ export default function FeedbackBar() {
 
   const submitFeedback = useCallback(async (useful: boolean) => {
     const sessionId =
-      sessionStorage.getItem("newslens_session_id") || generateSessionId();
-    sessionStorage.setItem("newslens_session_id", sessionId);
+      sessionStorage.getItem("candor_session_id") || generateSessionId();
+    sessionStorage.setItem("candor_session_id", sessionId);
 
     try {
       await fetch("/api/feedback", {

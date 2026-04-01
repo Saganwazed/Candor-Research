@@ -67,7 +67,7 @@ export default function Home() {
     <main className="page-container">
       {/* Header */}
       <header>
-        <h1 className="wordmark">NewsLens</h1>
+        <h1 className="wordmark">Candor</h1>
         <p className="tagline">
           Paste a news article or URL. Get an instant bias report.
         </p>
