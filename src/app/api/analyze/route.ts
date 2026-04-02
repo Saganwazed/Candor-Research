@@ -9,7 +9,7 @@ export const maxDuration = 30;
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const MAX_ARTICLE_WORDS = 9000;
-const AI_INFERENCE_TIMEOUT_MS = 15000;
+const AI_INFERENCE_TIMEOUT_MS = 25000;
 const MIN_TEXT_CHARS = 150;
 
 function getClientIp(request: NextRequest): string {
