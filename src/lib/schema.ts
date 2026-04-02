@@ -26,6 +26,7 @@ export const CredibilityFlagSchema = z.object({
 });
 
 export const AnalysisResponseSchema = z.object({
+  bias_summary: z.string(),
   bias_direction: BiasDirectionEnum,
   bias_justification: z.string(),
   credibility_flags: z.array(CredibilityFlagSchema),

@@ -12,6 +12,7 @@ export async function getMockAnalysis(text: string): Promise<AnalysisResponse> {
 
   if (wordCount < 30) {
     return {
+      bias_summary: "No clear bias detected.",
       bias_direction: "Unclear",
       bias_justification:
         "The submitted text is too short to perform a meaningful bias analysis — insufficient content for pattern detection.",
@@ -28,6 +29,7 @@ export async function getMockAnalysis(text: string): Promise<AnalysisResponse> {
 
   const mockResponses: AnalysisResponse[] = [
     {
+      bias_summary: "Pro-regulation framing with lopsided sourcing favoring consumer advocates over industry.",
       bias_direction: "Center-Left",
       bias_justification:
         'The article frames regulatory intervention as a necessary correction, uses "corporate greed" without attribution, and quotes consumer advocates three times versus one industry representative.',
@@ -54,6 +56,7 @@ export async function getMockAnalysis(text: string): Promise<AnalysisResponse> {
       content_suitable: true,
     },
     {
+      bias_summary: "Credits tax policy for growth while framing regulation as a jobs threat.",
       bias_direction: "Center-Right",
       bias_justification:
         'The article emphasizes economic growth figures while attributing them to tax policy, uses "job creators" to describe corporations, and frames regulatory proposals primarily as threats to employment.',
@@ -75,6 +78,7 @@ export async function getMockAnalysis(text: string): Promise<AnalysisResponse> {
       content_suitable: true,
     },
     {
+      bias_summary: "Balanced sourcing and neutral framing with one unverified cost figure.",
       bias_direction: "Center",
       bias_justification:
         "The article presents statements from both proponents and critics of the legislation with roughly equal length and framing, and uses neutral descriptors for all parties involved.",
@@ -91,6 +95,7 @@ export async function getMockAnalysis(text: string): Promise<AnalysisResponse> {
       content_suitable: true,
     },
     {
+      bias_summary: "Advocacy framing that excludes law enforcement perspectives entirely.",
       bias_direction: "Left",
       bias_justification:
         'The article exclusively quotes civil rights organizations and uses emotive phrases like "systemic injustice" and "communities under siege" while omitting law enforcement perspectives entirely.',
@@ -122,6 +127,7 @@ export async function getMockAnalysis(text: string): Promise<AnalysisResponse> {
       content_suitable: true,
     },
     {
+      bias_summary: "Frames immigration as a security crisis using unverified threat claims.",
       bias_direction: "Right",
       bias_justification:
         'The article frames immigration primarily as a security threat, uses "illegal aliens" rather than neutral terminology, and cites border patrol union representatives as objective sources.',

@@ -26,6 +26,9 @@ export default function ReportSection({ analysis }: ReportSectionProps) {
 
   return (
     <div className="report" id="report">
+      <div className="bias-summary report-reveal" id="section-bias-summary">
+        <p className="bias-summary-text">{analysis.bias_summary}</p>
+      </div>
       <BiasDirection
         direction={analysis.bias_direction}
         justification={analysis.bias_justification}
