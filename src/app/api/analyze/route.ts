@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AnalysisResponseSchema } from "@/lib/schema";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/prompt";
-import { getMockAnalysis } from "@/lib/mock";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // Force Node.js runtime — jsdom requires Node APIs
@@ -36,10 +35,9 @@ async function analyzeWithAI(
   retryCount = 0
 ): Promise<ReturnType<typeof AnalysisResponseSchema.parse>> {
   const apiKey = process.env.GOOGLE_GEMINI_API_KEY;
-  
+
   if (!apiKey) {
-    // Use mock mode when no API key is configured
-    return getMockAnalysis(articleText);
+    throw new Error("API_KEY_MISSING");
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -61,7 +59,18 @@ async function analyzeWithAI(
   ]);
 
   const response = result.response;
-  const jsonText = response.text().trim();
+  let jsonText = response.text().trim();
+
+  // Strip markdown code fences if Gemini wraps the response
+  if (jsonText.startsWith("```json")) {
+    jsonText = jsonText.substring(7);
+  } else if (jsonText.startsWith("```")) {
+    jsonText = jsonText.substring(3);
+  }
+  if (jsonText.endsWith("```")) {
+    jsonText = jsonText.substring(0, jsonText.length - 3);
+  }
+  jsonText = jsonText.trim();
 
   if (!jsonText) {
     throw new Error("Unexpected empty response from AI");
@@ -128,6 +137,15 @@ export async function POST(request: NextRequest) {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
+      if (message === "API_KEY_MISSING") {
+        return NextResponse.json(
+          {
+            error:
+              "Unable to create report. The analysis service is not configured.",
+          },
+          { status: 503 }
+        );
+      }
       if (message === "AI_TIMEOUT") {
         return NextResponse.json(
           {
