@@ -8,6 +8,7 @@ import ReportSection from "@/components/ReportSection";
 import Disclaimer from "@/components/Disclaimer";
 import ThemeToggle from "@/components/ThemeToggle";
 import ShareModal from "@/components/ShareModal";
+import ExtensionBanner from "@/components/ExtensionBanner";
 
 export default function Home() {
   const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
@@ -182,6 +183,9 @@ export default function Home() {
           hasShared={shareData !== null}
         />
       )}
+
+      {/* Extension Banner */}
+      <ExtensionBanner />
 
       {/* Share Modal */}
       {showShareModal && shareData && analysis && (
