@@ -60,11 +60,13 @@ export default function Home() {
         setFetchStatus("analyzing");
       }
 
+      const isTwitter = mode === "url" && /^https?:\/\/(www\.)?(twitter\.com|x\.com)\//i.test(value);
+
       const response = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "text", text: articleText }),
-        });
+        body: JSON.stringify({ mode: "text", text: articleText, isTwitter }),
+      });
 
       const data = await response.json();
 

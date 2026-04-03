@@ -38,6 +38,72 @@ function isBlockedUrl(urlString: string): boolean {
   return false;
 }
 
+function isTwitterUrl(urlString: string): boolean {
+  try {
+    const parsed = new URL(urlString);
+    const hostname = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    return ["twitter.com", "x.com", "mobile.twitter.com"].includes(hostname);
+  } catch {
+    return false;
+  }
+}
+
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ");
+}
+
+async function fetchTweetContent(url: string): Promise<string> {
+  const oembedEndpoint = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(oembedEndpoint, {
+      headers: { "User-Agent": USER_AGENT },
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Twitter oEmbed returned ${response.status}`);
+    }
+
+    const data = await response.json() as {
+      html: string;
+      author_name: string;
+      author_url: string;
+    };
+
+    // Extract tweet <p> text from oEmbed HTML
+    const pMatch = data.html.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+    if (!pMatch) throw new Error("Could not parse tweet text from oEmbed HTML");
+
+    const tweetText = decodeHtmlEntities(
+      pMatch[1]
+        .replace(/<a[^>]*>([^<]*)<\/a>/g, "$1") // replace links with their text
+        .replace(/<[^>]+>/g, "")                 // strip remaining tags
+        .trim()
+    );
+
+    const handle = data.author_url.split("/").filter(Boolean).pop() || "unknown";
+
+    return (
+      `[Social Media Post — Twitter/X]\n` +
+      `Author: ${data.author_name} (@${handle})\n\n` +
+      `${tweetText}\n\n` +
+      `[This is a social media post. Analyze the bias and framing within the post itself.]`
+    );
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function fetchWithJina(url: string): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -91,32 +157,44 @@ export async function POST(request: NextRequest) {
     }
 
     let content = "";
+    const isTwitter = isTwitterUrl(url);
 
-    try {
-      content = await fetchWithJina(url);
-    } catch (jinaError) {
-      console.warn("Jina Reader failed:", jinaError);
+    if (isTwitter) {
+      // Twitter/X: use oEmbed API (no login required), Jina as fallback
+      try {
+        content = await fetchTweetContent(url);
+      } catch (oembedError) {
+        console.warn("Twitter oEmbed failed, trying Jina:", oembedError);
+        try {
+          content = await fetchWithJina(url);
+        } catch {
+          return NextResponse.json(
+            { error: "Could not retrieve this tweet. It may be protected, deleted, or from an account that restricts access." },
+            { status: 422 }
+          );
+        }
+      }
+    } else {
+      try {
+        content = await fetchWithJina(url);
+      } catch (jinaError) {
+        console.warn("Jina Reader failed:", jinaError);
+        return NextResponse.json(
+          { error: "Could not retrieve article content. The site may block automated access." },
+          { status: 422 }
+        );
+      }
+    }
+
+    // Minimum sanity check
+    if (content.length < 30) {
       return NextResponse.json(
-        {
-          error:
-            "Could not retrieve article content. The site may block automated access.",
-        },
+        { error: "Could not retrieve enough content from this URL." },
         { status: 422 }
       );
     }
 
-    // Minimum sanity check for content length
-    if (content.length < 100) {
-      return NextResponse.json(
-        {
-          error:
-            "Could not retrieve article content. The site may block automated access.",
-        },
-        { status: 422 }
-      );
-    }
-
-    return NextResponse.json({ content });
+    return NextResponse.json({ content, isTwitter });
   } catch (error) {
     console.error("fetch-url route error:", error);
     return NextResponse.json(

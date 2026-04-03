@@ -11,6 +11,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const MAX_ARTICLE_WORDS = 9000;
 const AI_INFERENCE_TIMEOUT_MS = 25000;
 const MIN_TEXT_CHARS = 150;
+const MIN_TEXT_CHARS_TWITTER = 10;
 
 function getClientIp(request: NextRequest): string {
   if (request.ip) return request.ip;
@@ -121,16 +122,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { mode, text } = body as {
+    const { mode, text, isTwitter } = body as {
       mode: "text";
       text?: string;
+      isTwitter?: boolean;
     };
 
-    if (mode !== "text" || !text || text.length < MIN_TEXT_CHARS) {
+    const minChars = isTwitter ? MIN_TEXT_CHARS_TWITTER : MIN_TEXT_CHARS;
+
+    if (mode !== "text" || !text || text.length < minChars) {
       return NextResponse.json(
         {
           error:
-            "Paste the full article text — this looks too short.",
+            isTwitter
+              ? "Could not retrieve enough content from this tweet."
+              : "Paste the full article text — this looks too short.",
         },
         { status: 400 }
       );
