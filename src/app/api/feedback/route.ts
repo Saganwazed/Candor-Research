@@ -15,9 +15,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Log feedback — Supabase hook point for later
+    // Sanitize before logging to prevent log injection
+    const safeSessionId = session_id.replace(/[^\w-]/g, "").slice(0, 64);
     console.log(
-      `[Feedback] session=${session_id} useful=${useful} time=${new Date().toISOString()}`
+      `[Feedback] session=${safeSessionId} useful=${useful} time=${new Date().toISOString()}`
     );
 
     return NextResponse.json({ success: true });

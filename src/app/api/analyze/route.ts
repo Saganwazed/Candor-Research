@@ -13,11 +13,18 @@ const AI_INFERENCE_TIMEOUT_MS = 25000;
 const MIN_TEXT_CHARS = 150;
 
 function getClientIp(request: NextRequest): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
+  if (request.ip) return request.ip;
+
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp) return realIp;
+
+  const forwardedFor = request.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    const ips = forwardedFor.split(",").map((ip) => ip.trim());
+    return ips[ips.length - 1] || "unknown";
+  }
+
+  return "unknown";
 }
 
 function truncateToWordLimit(text: string, maxWords: number): { text: string; wasTruncated: boolean } {
@@ -106,6 +113,11 @@ export async function POST(request: NextRequest) {
           },
         }
       );
+    }
+
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 500_000) {
+      return NextResponse.json({ error: "Request too large." }, { status: 413 });
     }
 
     const body = await request.json();

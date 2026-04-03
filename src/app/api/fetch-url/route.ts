@@ -4,8 +4,39 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const FETCH_TIMEOUT_MS = 15000;
+const MAX_BODY_BYTES = 8192;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+
+function isBlockedUrl(urlString: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(urlString);
+  } catch {
+    return true;
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) return true;
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (["localhost", "127.0.0.1", "::1", "0.0.0.0", "[::1]"].includes(hostname)) return true;
+
+  // Link-local: AWS metadata (169.254.169.254), Azure IMDS, GCP metadata
+  if (hostname.startsWith("169.254.")) return true;
+
+  // Private IPv4 ranges
+  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 127) return true;
+  }
+
+  return false;
+}
 
 async function fetchWithJina(url: string): Promise<string> {
   const controller = new AbortController();
@@ -35,54 +66,24 @@ async function fetchWithJina(url: string): Promise<string> {
   }
 }
 
-async function fetchWithReadability(url: string): Promise<string> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-      },
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`Fallback fetch returned status: ${response.status}`);
-    }
-
-    const html = await response.text();
-    if (!html || html.trim().length === 0) {
-      throw new Error("Fallback fetch returned empty body");
-    }
-
-    // Dynamic import to avoid Vercel serverless cold-start penalties globally
-    const { JSDOM } = await import("jsdom");
-    const { Readability } = await import("@mozilla/readability");
-
-    const dom = new JSDOM(html, { url });
-    const reader = new Readability(dom.window.document);
-    const article = reader.parse();
-
-    if (!article || !article.textContent) {
-      throw new Error("Readability could not extract content");
-    }
-
-    return article.textContent.replace(/\s+/g, " ").trim();
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
+    const contentLength = request.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
+      return NextResponse.json({ error: "Request too large." }, { status: 413 });
+    }
+
     const body = await request.json();
     const { url } = body;
 
-    if (!url || !/^https?:\/\/.+/.test(url)) {
+    if (!url || typeof url !== "string" || !/^https?:\/\/.+/.test(url)) {
+      return NextResponse.json(
+        { error: "Invalid URL provided." },
+        { status: 400 }
+      );
+    }
+
+    if (isBlockedUrl(url)) {
       return NextResponse.json(
         { error: "Invalid URL provided." },
         { status: 400 }
@@ -92,24 +93,16 @@ export async function POST(request: NextRequest) {
     let content = "";
 
     try {
-      // 1. Try Jina Reader
       content = await fetchWithJina(url);
     } catch (jinaError) {
-      console.warn("Jina Reader failed, trying fallback:", jinaError);
-      
-      try {
-        // 2. Try Fallback
-        content = await fetchWithReadability(url);
-      } catch (fallbackError) {
-        console.warn("Fallback failed:", fallbackError);
-        return NextResponse.json(
-          {
-            error:
-              "Could not retrieve article content. The site may block automated access.",
-          },
-          { status: 422 }
-        );
-      }
+      console.warn("Jina Reader failed:", jinaError);
+      return NextResponse.json(
+        {
+          error:
+            "Could not retrieve article content. The site may block automated access.",
+        },
+        { status: 422 }
+      );
     }
 
     // Minimum sanity check for content length

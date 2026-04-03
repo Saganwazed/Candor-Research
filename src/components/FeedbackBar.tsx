@@ -59,8 +59,9 @@ export default function FeedbackBar() {
 }
 
 function generateSessionId(): string {
-  return (
-    Math.random().toString(36).substring(2, 15) +
-    Math.random().toString(36).substring(2, 15)
-  );
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // Fallback for very old browsers
+  return Date.now().toString(36) + Math.random().toString(36).substring(2);
 }
