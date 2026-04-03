@@ -4,9 +4,12 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const FETCH_TIMEOUT_MS = 15000;
+const BROWSER_TIMEOUT_MS = 20000;
 const MAX_BODY_BYTES = 8192;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
+
+// ─── URL Validation ──────────────────────────────────────────────────────────
 
 function isBlockedUrl(urlString: string): boolean {
   let parsed: URL;
@@ -21,11 +24,8 @@ function isBlockedUrl(urlString: string): boolean {
   const hostname = parsed.hostname.toLowerCase();
 
   if (["localhost", "127.0.0.1", "::1", "0.0.0.0", "[::1]"].includes(hostname)) return true;
-
-  // Link-local: AWS metadata (169.254.169.254), Azure IMDS, GCP metadata
   if (hostname.startsWith("169.254.")) return true;
 
-  // Private IPv4 ranges
   const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (ipv4) {
     const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
@@ -58,6 +58,8 @@ function decodeHtmlEntities(text: string): string {
     .replace(/&nbsp;/g, " ");
 }
 
+// ─── Tier 0: Twitter oEmbed ──────────────────────────────────────────────────
+
 async function fetchTweetContent(url: string): Promise<string> {
   const oembedEndpoint = `https://publish.twitter.com/oembed?url=${encodeURIComponent(url)}&omit_script=true`;
 
@@ -74,20 +76,19 @@ async function fetchTweetContent(url: string): Promise<string> {
       throw new Error(`Twitter oEmbed returned ${response.status}`);
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       html: string;
       author_name: string;
       author_url: string;
     };
 
-    // Extract tweet <p> text from oEmbed HTML
     const pMatch = data.html.match(/<p[^>]*>([\s\S]*?)<\/p>/);
     if (!pMatch) throw new Error("Could not parse tweet text from oEmbed HTML");
 
     const tweetText = decodeHtmlEntities(
       pMatch[1]
-        .replace(/<a[^>]*>([^<]*)<\/a>/g, "$1") // replace links with their text
-        .replace(/<[^>]+>/g, "")                 // strip remaining tags
+        .replace(/<a[^>]*>([^<]*)<\/a>/g, "$1")
+        .replace(/<[^>]+>/g, "")
         .trim()
     );
 
@@ -104,6 +105,8 @@ async function fetchTweetContent(url: string): Promise<string> {
   }
 }
 
+// ─── Tier 1: Jina Reader (fast, free) ───────────────────────────────────────
+
 async function fetchWithJina(url: string): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -111,9 +114,7 @@ async function fetchWithJina(url: string): Promise<string> {
   try {
     const response = await fetch(`https://r.jina.ai/${url}`, {
       method: "GET",
-      headers: {
-        "User-Agent": USER_AGENT,
-      },
+      headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
     });
 
@@ -125,12 +126,120 @@ async function fetchWithJina(url: string): Promise<string> {
     if (!text || text.trim().length === 0) {
       throw new Error("Jina Reader returned empty body");
     }
-    
+
     return text;
   } finally {
     clearTimeout(timeoutId);
   }
 }
+
+// ─── Tier 2: Direct fetch + Mozilla Readability ─────────────────────────────
+
+async function fetchWithReadability(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+
+    if (!response.ok) {
+      throw new Error(`Direct fetch returned ${response.status}`);
+    }
+
+    const html = await response.text();
+    if (!html || html.length < 200) {
+      throw new Error("Direct fetch returned insufficient HTML");
+    }
+
+    // Dynamic imports — only loaded when this tier is actually needed
+    const { JSDOM } = await import("jsdom");
+    const { Readability } = await import("@mozilla/readability");
+
+    const dom = new JSDOM(html, { url });
+    const reader = new Readability(dom.window.document);
+    const article = reader.parse();
+
+    if (!article || !article.textContent || article.textContent.trim().length < 100) {
+      throw new Error("Readability could not extract article content");
+    }
+
+    return article.textContent.trim();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+// ─── Tier 3: Headless Chromium (catches JS-heavy / bot-protected sites) ─────
+
+async function fetchWithBrowser(url: string): Promise<string> {
+  // Dynamic imports — heavy deps only loaded as last resort
+  const chromium = (await import("@sparticuz/chromium")).default;
+  const puppeteer = await import("puppeteer-core");
+
+  const browser = await puppeteer.default.launch({
+    args: chromium.args,
+    defaultViewport: { width: 1280, height: 720 },
+    executablePath: await chromium.executablePath(),
+    headless: true,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(USER_AGENT);
+    await page.goto(url, {
+      waitUntil: "networkidle2",
+      timeout: BROWSER_TIMEOUT_MS,
+    });
+
+    // Wait a beat for any lazy-loaded content
+    await new Promise((r) => setTimeout(r, 1000));
+
+    // Extract article text — try multiple selectors
+    const text = await page.evaluate(() => {
+      // Priority: <article>, [role="article"], <main>, then <body>
+      const selectors = [
+        "article",
+        '[role="article"]',
+        "main",
+        ".article-body",
+        ".post-content",
+        ".entry-content",
+        ".story-body",
+      ];
+
+      for (const sel of selectors) {
+        const el = document.querySelector(sel);
+        if (el && el.textContent && el.textContent.trim().length > 200) {
+          return el.textContent.trim();
+        }
+      }
+
+      // Fallback: body text, stripping nav/footer/header/aside
+      const clone = document.body.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("nav, footer, header, aside, script, style, [role='navigation']").forEach((el) => el.remove());
+
+      return clone.textContent?.trim() || "";
+    });
+
+    if (!text || text.length < 100) {
+      throw new Error("Browser extraction returned insufficient content");
+    }
+
+    return text;
+  } finally {
+    await browser.close();
+  }
+}
+
+// ─── Route Handler ───────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
   try {
@@ -160,7 +269,7 @@ export async function POST(request: NextRequest) {
     const isTwitter = isTwitterUrl(url);
 
     if (isTwitter) {
-      // Twitter/X: use oEmbed API (no login required), Jina as fallback
+      // Twitter/X: oEmbed → Jina fallback
       try {
         content = await fetchTweetContent(url);
       } catch (oembedError) {
@@ -169,21 +278,46 @@ export async function POST(request: NextRequest) {
           content = await fetchWithJina(url);
         } catch {
           return NextResponse.json(
-            { error: "Could not retrieve this tweet. It may be protected, deleted, or from an account that restricts access." },
+            {
+              error:
+                "Could not retrieve this tweet. It may be protected, deleted, or from an account that restricts access.",
+            },
             { status: 422 }
           );
         }
       }
     } else {
+      // Articles: Jina → Readability → Headless Chromium
+      let method = "";
       try {
         content = await fetchWithJina(url);
+        method = "jina";
       } catch (jinaError) {
-        console.warn("Jina Reader failed:", jinaError);
-        return NextResponse.json(
-          { error: "Could not retrieve article content. The site may block automated access." },
-          { status: 422 }
-        );
+        console.warn("Tier 1 (Jina) failed:", jinaError);
+
+        try {
+          content = await fetchWithReadability(url);
+          method = "readability";
+        } catch (readabilityError) {
+          console.warn("Tier 2 (Readability) failed:", readabilityError);
+
+          try {
+            content = await fetchWithBrowser(url);
+            method = "browser";
+          } catch (browserError) {
+            console.warn("Tier 3 (Browser) failed:", browserError);
+            return NextResponse.json(
+              {
+                error:
+                  "Could not retrieve article content. All extraction methods failed for this site.",
+              },
+              { status: 422 }
+            );
+          }
+        }
       }
+
+      console.log(`[fetch-url] Extracted via ${method}: ${url.slice(0, 80)}`);
     }
 
     // Minimum sanity check
