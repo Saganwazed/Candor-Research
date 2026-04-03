@@ -6,6 +6,7 @@ import InputSection from "@/components/InputSection";
 import LoadingState from "@/components/LoadingState";
 import ReportSection from "@/components/ReportSection";
 import Disclaimer from "@/components/Disclaimer";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function Home() {
   const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
@@ -65,6 +66,8 @@ export default function Home() {
 
   return (
     <main className="page-container">
+      <ThemeToggle />
+
       {/* Header */}
       <header>
         <h1 className="wordmark">Candor</h1>
