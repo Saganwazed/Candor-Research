@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { AnalysisResponseSchema } from "@/lib/schema";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/prompt";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { signAnalysis } from "@/lib/sign";
 
-// Force Node.js runtime — jsdom requires Node APIs
 export const runtime = "nodejs";
 export const maxDuration = 30;
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -140,7 +140,7 @@ export async function POST(request: NextRequest) {
     try {
       const analysis = await analyzeWithAI(truncated.text, truncated.wasTruncated);
       return NextResponse.json(
-        { analysis },
+        { analysis, token: signAnalysis(analysis) },
         {
           headers: {
             "X-RateLimit-Remaining": rateLimit.remaining.toString(),

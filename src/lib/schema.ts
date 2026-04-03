@@ -22,15 +22,15 @@ export const ConfidenceEnum = z.enum(["High", "Medium", "Low"]);
 
 export const CredibilityFlagSchema = z.object({
   flag_type: FlagTypeEnum,
-  description: z.string(),
+  description: z.string().max(500),
 });
 
 export const AnalysisResponseSchema = z.object({
-  bias_summary: z.string(),
+  bias_summary: z.string().max(200),
   bias_direction: BiasDirectionEnum,
-  bias_justification: z.string(),
-  credibility_flags: z.array(CredibilityFlagSchema),
-  hidden_agenda: z.string(),
+  bias_justification: z.string().max(500),
+  credibility_flags: z.array(CredibilityFlagSchema).max(10),
+  hidden_agenda: z.string().max(500),
   analysis_confidence: ConfidenceEnum,
   content_suitable: z.boolean(),
 });
