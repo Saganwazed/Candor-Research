@@ -1,50 +1,51 @@
-/**
- * Simple in-memory IP-based rate limiter.
- * 10 requests per IP per hour (per PRD OQ3).
- */
-
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
-
-const store = new Map<string, RateLimitEntry>();
+import { createApiClient } from "@/utils/supabase/api";
 
 const WINDOW_MS = 60 * 60 * 1000; // 1 hour
-const MAX_REQUESTS = 50; // Increased for testing
+const MAX_REQUESTS = 50;
 
-// Clean up expired entries every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  store.forEach((entry, key) => {
-    if (now > entry.resetAt) {
-      store.delete(key);
-    }
-  });
-}, 5 * 60 * 1000);
-
-export function checkRateLimit(ip: string): {
+export async function checkRateLimit(ip: string): Promise<{
   allowed: boolean;
   remaining: number;
   resetAt: number;
-} {
+}> {
+  const supabase = createApiClient();
   const now = Date.now();
-  const entry = store.get(ip);
+  const nowIso = new Date(now).toISOString();
+  const resetAt = new Date(now + WINDOW_MS).toISOString();
 
-  if (!entry || now > entry.resetAt) {
-    const resetAt = now + WINDOW_MS;
-    store.set(ip, { count: 1, resetAt });
-    return { allowed: true, remaining: MAX_REQUESTS - 1, resetAt };
+  const { data: existing } = await supabase
+    .from("rate_limits")
+    .select("count, reset_at")
+    .eq("ip", ip)
+    .maybeSingle();
+
+  // No entry, or window expired — start fresh
+  if (!existing || new Date(existing.reset_at).getTime() <= now) {
+    await supabase.from("rate_limits").upsert(
+      { ip, count: 1, reset_at: resetAt },
+      { onConflict: "ip" }
+    );
+    return { allowed: true, remaining: MAX_REQUESTS - 1, resetAt: now + WINDOW_MS };
   }
 
-  if (entry.count >= MAX_REQUESTS) {
-    return { allowed: false, remaining: 0, resetAt: entry.resetAt };
+  // Window active — check count
+  if (existing.count >= MAX_REQUESTS) {
+    return {
+      allowed: false,
+      remaining: 0,
+      resetAt: new Date(existing.reset_at).getTime(),
+    };
   }
 
-  entry.count++;
+  // Increment
+  await supabase
+    .from("rate_limits")
+    .update({ count: existing.count + 1 })
+    .eq("ip", ip);
+
   return {
     allowed: true,
-    remaining: MAX_REQUESTS - entry.count,
-    resetAt: entry.resetAt,
+    remaining: MAX_REQUESTS - (existing.count + 1),
+    resetAt: new Date(existing.reset_at).getTime(),
   };
 }
