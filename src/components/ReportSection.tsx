@@ -5,12 +5,21 @@ import BiasDirection from "./BiasDirection";
 import CredibilityFlags from "./CredibilityFlags";
 import HiddenAgenda from "./HiddenAgenda";
 import FeedbackBar from "./FeedbackBar";
+import ShareButton from "./ShareButton";
 
 interface ReportSectionProps {
   analysis: AnalysisResponse;
+  onShare: () => void;
+  isSharing: boolean;
+  hasShared: boolean;
 }
 
-export default function ReportSection({ analysis }: ReportSectionProps) {
+export default function ReportSection({
+  analysis,
+  onShare,
+  isSharing,
+  hasShared,
+}: ReportSectionProps) {
   if (!analysis.content_suitable) {
     return (
       <div className="report report-reveal" id="report-unsuitable">
@@ -37,7 +46,14 @@ export default function ReportSection({ analysis }: ReportSectionProps) {
       <HiddenAgenda agenda={analysis.hidden_agenda} />
 
       <div className="report-reveal report-reveal-delay-4">
-        <FeedbackBar />
+        <div className="report-actions-row">
+          <FeedbackBar />
+          <ShareButton
+            onShare={onShare}
+            isSharing={isSharing}
+            hasShared={hasShared}
+          />
+        </div>
 
         {/* Persistent disclaimer on every report per R4 */}
         <div className="disclaimer">
