@@ -10,7 +10,6 @@ export async function checkRateLimit(ip: string): Promise<{
 }> {
   const supabase = createApiClient();
   const now = Date.now();
-  const nowIso = new Date(now).toISOString();
   const resetAt = new Date(now + WINDOW_MS).toISOString();
 
   const { data: existing } = await supabase
