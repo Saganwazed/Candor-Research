@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1 class="wordmark">Candor</h1>
+    <button id="btn-theme" class="theme-toggle" aria-label="Toggle dark mode">
+      <svg id="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <svg id="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- State: Idle -->
+  <section id="state-idle">
+    <p class="tagline">Analyze this page for bias, credibility issues, and hidden agendas.</p>
+    <button id="btn-analyze" class="btn-primary">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px; vertical-align: -1px;">
+        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      Analyze this page
+    </button>
+  </section>
+
+  <!-- State: Loading -->
+  <section id="state-loading" hidden>
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <p id="loading-label" class="loading-label">Reading the article...</p>
+    </div>
+  </section>
+
+  <!-- State: Error -->
+  <section id="state-error" hidden>
+    <div class="error-message" role="alert">
+      <span id="error-text"></span>
+    </div>
+    <button id="btn-retry" class="btn-primary">Try again</button>
+    <a href="https://news-lens-git-main-saganwazeds-projects.vercel.app" target="_blank" class="fallback-link">
+      Or paste article text on candor.app
+    </a>
+  </section>
+
+  <!-- State: Report -->
+  <section id="state-report" hidden>
+    <!-- Bias Summary -->
+    <div class="bias-summary report-reveal">
+      <p id="bias-summary-text" class="bias-summary-text"></p>
+    </div>
+
+    <!-- Bias Direction -->
+    <div class="report-section report-reveal">
+      <h2 class="section-heading">Bias direction</h2>
+      <div class="spectrum-container">
+        <div class="spectrum-labels"><span>Left</span><span>Right</span></div>
+        <div class="spectrum-track">
+          <div id="spectrum-marker" class="spectrum-marker"></div>
+        </div>
+      </div>
+      <div id="bias-label" class="bias-label"></div>
+      <p id="bias-justification" class="bias-justification"></p>
+    </div>
+
+    <!-- Credibility Flags -->
+    <div class="report-section report-reveal">
+      <h2 class="section-heading">Credibility flags</h2>
+      <div id="flags-container"></div>
+    </div>
+
+    <!-- Hidden Agenda -->
+    <div class="report-section report-reveal">
+      <h2 class="section-heading">Hidden agenda</h2>
+      <p id="agenda-text" class="agenda-text"></p>
+    </div>
+
+    <!-- Confidence + Disclaimer -->
+    <div class="report-footer report-reveal">
+      <span id="confidence-badge" class="confidence-badge"></span>
+      <p class="disclaimer-text">AI analysis — use as a starting point, not a verdict.</p>
+    </div>
+  </section>
+
+  <!-- State: Not Suitable -->
+  <section id="state-unsuitable" hidden>
+    <div class="content-warning">
+      <p class="content-warning-text">This doesn't look like a news article.</p>
+      <p class="content-warning-sub">Try using Candor on a news story, opinion piece, or political tweet.</p>
+    </div>
+    <button id="btn-retry-unsuitable" class="btn-primary btn-secondary">Try again</button>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>
