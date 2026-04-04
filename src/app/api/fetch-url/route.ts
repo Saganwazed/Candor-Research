@@ -17,8 +17,20 @@ const USER_AGENT =
  * Check if an IP address is private/reserved (SSRF blocklist).
  */
 function isBlockedIp(ip: string): boolean {
-  if (["127.0.0.1", "::1", "0.0.0.0", "::"].includes(ip)) return true;
+  // Check common reserved IPv4 and IPv6 addresses
+  if (["127.0.0.1", "::1", "0.0.0.0", "::", "[::1]"].includes(ip)) return true;
   if (ip.startsWith("169.254.")) return true; // Link-local + AWS metadata
+
+  // Check IPv6 loopback, link-local, and private ranges
+  const ipv6Patterns = [
+    /^::1$/, // IPv6 loopback
+    /^fe80::/i, // IPv6 link-local
+    /^fc00::/i, // IPv6 unique local
+    /^fd00::/i, // IPv6 unique local
+  ];
+  for (const pattern of ipv6Patterns) {
+    if (pattern.test(ip)) return true;
+  }
 
   const ipv4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (ipv4) {
@@ -63,11 +75,16 @@ async function resolveAndValidate(urlString: string): Promise<{ resolvedIp: stri
   const parsed = new URL(urlString);
 
   // If hostname is already an IP, validate directly
-  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsed.hostname)) {
-    if (isBlockedIp(parsed.hostname)) {
+  const ipv4Pattern = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/;
+  const ipv6Pattern = /^(\[)?([0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(\])?$/i;
+
+  if (ipv4Pattern.test(parsed.hostname) || ipv6Pattern.test(parsed.hostname)) {
+    // Remove brackets for IPv6 if present
+    const ipToCheck = parsed.hostname.replace(/[\[\]]/g, '');
+    if (isBlockedIp(ipToCheck)) {
       throw new Error("BLOCKED_IP");
     }
-    return { resolvedIp: parsed.hostname, parsed };
+    return { resolvedIp: ipToCheck, parsed };
   }
 
   // Resolve DNS and validate the actual IP

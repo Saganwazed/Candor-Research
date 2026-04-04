@@ -29,6 +29,14 @@ function verifyCsrf(request: NextRequest): boolean {
 // POST — Create a shared report
 export async function POST(request: NextRequest) {
   try {
+    // CSRF verification (double-submit cookie pattern)
+    if (!verifyCsrf(request)) {
+      return NextResponse.json(
+        { error: "Invalid CSRF token." },
+        { status: 403 }
+      );
+    }
+
     // Parse body with enforced byte limit
     let body: {
       analysis: unknown;
