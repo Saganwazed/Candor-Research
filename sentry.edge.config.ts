@@ -11,4 +11,13 @@ Sentry.init({
 
   // Release (optional, but recommended)
   release: process.env.NEXT_PUBLIC_APP_VERSION || "unknown",
+
+  // Integrations
+  integrations: [
+    // Send console.log, console.warn, and console.error calls as logs to Sentry
+    Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
+  ],
+
+  // Enable logs to be sent to Sentry
+  enableLogs: true,
 });

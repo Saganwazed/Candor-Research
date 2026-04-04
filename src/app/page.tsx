@@ -170,29 +170,6 @@ export default function Home() {
     <main className="page-container">
       <ThemeToggle />
 
-      {/* Sentry Test Button */}
-      <button
-        onClick={() => {
-          myUndefinedFunction();
-        }}
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          padding: "8px 12px",
-          fontSize: "12px",
-          backgroundColor: "#f44f46",
-          color: "white",
-          border: "none",
-          borderRadius: "4px",
-          cursor: "pointer",
-          zIndex: 9999,
-        }}
-        title="Trigger a test error for Sentry"
-      >
-        Test Sentry
-      </button>
-
       {/* Header */}
       <header>
         <h1 className="wordmark">Candor</h1>

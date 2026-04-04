@@ -44,6 +44,31 @@ export default function SentryExamplePage() {
           </button>
         </div>
 
+        {/* Test Log */}
+        <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "1.5rem" }}>
+          <h2 style={{ fontWeight: "600", marginBottom: "0.5rem" }}>Test Log</h2>
+          <p style={{ color: "#666", fontSize: "0.9rem", marginBottom: "1rem" }}>
+            Sends a structured log to Sentry using <code>Sentry.logger</code>.
+          </p>
+          <button
+            onClick={() => {
+              Sentry.logger.info("User triggered test log", { log_source: "sentry_test" });
+              alert("Log sent to Sentry! Check your Logs dashboard.");
+            }}
+            style={{
+              padding: "0.5rem 1rem",
+              backgroundColor: "#38a169",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "500",
+            }}
+          >
+            Send Test Log
+          </button>
+        </div>
+
         {/* Capture Message */}
         <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", padding: "1.5rem" }}>
           <h2 style={{ fontWeight: "600", marginBottom: "0.5rem" }}>Capture Message</h2>
