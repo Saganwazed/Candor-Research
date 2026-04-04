@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { lookup } from "dns/promises";
+import { parseJsonBody } from "@/lib/safe-body";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -9,7 +11,29 @@ const MAX_BODY_BYTES = 8192;
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36";
 
-// ─── URL Validation ──────────────────────────────────────────────────────────
+// ─── URL & IP Validation ────────────────────────────────────────────────────
+
+/**
+ * Check if an IP address is private/reserved (SSRF blocklist).
+ */
+function isBlockedIp(ip: string): boolean {
+  if (["127.0.0.1", "::1", "0.0.0.0", "::"].includes(ip)) return true;
+  if (ip.startsWith("169.254.")) return true; // Link-local + AWS metadata
+
+  const ipv4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4) {
+    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+    if (a === 0) return true;       // 0.0.0.0/8
+    if (a === 10) return true;      // 10.0.0.0/8
+    if (a === 100 && b >= 64 && b <= 127) return true; // 100.64.0.0/10 (CGNAT)
+    if (a === 127) return true;     // 127.0.0.0/8
+    if (a === 169 && b === 254) return true; // 169.254.0.0/16
+    if (a === 172 && b >= 16 && b <= 31) return true;  // 172.16.0.0/12
+    if (a === 192 && b === 168) return true; // 192.168.0.0/16
+  }
+
+  return false;
+}
 
 function isBlockedUrl(urlString: string): boolean {
   let parsed: URL;
@@ -24,18 +48,36 @@ function isBlockedUrl(urlString: string): boolean {
   const hostname = parsed.hostname.toLowerCase();
 
   if (["localhost", "127.0.0.1", "::1", "0.0.0.0", "[::1]"].includes(hostname)) return true;
-  if (hostname.startsWith("169.254.")) return true;
 
-  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4) {
-    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
-    if (a === 10) return true;
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 127) return true;
-  }
+  // Also check if hostname is a raw IP
+  if (isBlockedIp(hostname)) return true;
 
   return false;
+}
+
+/**
+ * Resolve hostname via DNS and validate the resolved IP against the blocklist.
+ * Prevents DNS rebinding attacks (TOCTOU between hostname check and fetch).
+ */
+async function resolveAndValidate(urlString: string): Promise<{ resolvedIp: string; parsed: URL }> {
+  const parsed = new URL(urlString);
+
+  // If hostname is already an IP, validate directly
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(parsed.hostname)) {
+    if (isBlockedIp(parsed.hostname)) {
+      throw new Error("BLOCKED_IP");
+    }
+    return { resolvedIp: parsed.hostname, parsed };
+  }
+
+  // Resolve DNS and validate the actual IP
+  const { address } = await lookup(parsed.hostname);
+
+  if (isBlockedIp(address)) {
+    throw new Error("BLOCKED_IP");
+  }
+
+  return { resolvedIp: address, parsed };
 }
 
 function isTwitterUrl(urlString: string): boolean {
@@ -112,7 +154,8 @@ async function fetchWithJina(url: string): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(`https://r.jina.ai/${url}`, {
+    // Properly encode the URL in the Jina Reader path
+    const response = await fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
       method: "GET",
       headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
@@ -133,22 +176,43 @@ async function fetchWithJina(url: string): Promise<string> {
   }
 }
 
-// ─── Tier 2: Direct fetch + Mozilla Readability ─────────────────────────────
+// ─── Tier 2: Direct fetch + Mozilla Readability (DNS-pinned) ───────────────
 
-async function fetchWithReadability(url: string): Promise<string> {
+async function fetchWithReadability(url: string, resolvedIp: string): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    const response = await fetch(url, {
+    // Use the resolved IP in the Host header to prevent DNS rebinding.
+    // We replace the hostname with the resolved IP in the URL and set Host header.
+    const parsed = new URL(url);
+    const ipUrl = new URL(url);
+    ipUrl.hostname = resolvedIp;
+
+    const response = await fetch(ipUrl.toString(), {
       headers: {
         "User-Agent": USER_AGENT,
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9",
+        Host: parsed.hostname, // Original hostname for virtual hosting
       },
       signal: controller.signal,
-      redirect: "follow",
+      redirect: "manual", // Don't follow redirects to avoid re-resolving DNS
     });
+
+    // Handle redirects manually — re-validate the redirect target
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
+      if (location) {
+        const redirectUrl = new URL(location, url).toString();
+        if (isBlockedUrl(redirectUrl)) {
+          throw new Error("Redirect target is blocked");
+        }
+        // Re-resolve DNS for the redirect target
+        const { resolvedIp: newIp } = await resolveAndValidate(redirectUrl);
+        return fetchWithReadability(redirectUrl, newIp);
+      }
+    }
 
     if (!response.ok) {
       throw new Error(`Direct fetch returned ${response.status}`);
@@ -178,14 +242,21 @@ async function fetchWithReadability(url: string): Promise<string> {
 }
 
 // ─── Tier 3: Headless Chromium (catches JS-heavy / bot-protected sites) ─────
+// JavaScript is DISABLED and requests are intercepted to prevent SSRF.
 
-async function fetchWithBrowser(url: string): Promise<string> {
+async function fetchWithBrowser(url: string, resolvedIp: string): Promise<string> {
   // Dynamic imports — heavy deps only loaded as last resort
   const chromium = (await import("@sparticuz/chromium")).default;
   const puppeteer = await import("puppeteer-core");
 
   const browser = await puppeteer.default.launch({
-    args: chromium.args,
+    args: [
+      ...chromium.args,
+      "--disable-extensions",
+      "--disable-background-networking",
+      "--disable-default-apps",
+      "--no-first-run",
+    ],
     defaultViewport: { width: 1280, height: 720 },
     executablePath: await chromium.executablePath(),
     headless: true,
@@ -194,17 +265,39 @@ async function fetchWithBrowser(url: string): Promise<string> {
   try {
     const page = await browser.newPage();
     await page.setUserAgent(USER_AGENT);
-    await page.goto(url, {
+
+    // SECURITY: Disable JavaScript execution on untrusted pages
+    await page.setJavaScriptEnabled(false);
+
+    // SECURITY: Intercept requests — only allow the target URL's origin
+    const allowedOrigin = new URL(url).origin;
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+      try {
+        const reqUrl = new URL(req.url());
+        if (reqUrl.origin === allowedOrigin || reqUrl.protocol === "data:") {
+          req.continue();
+        } else {
+          req.abort("blockedbyclient");
+        }
+      } catch {
+        req.abort("blockedbyclient");
+      }
+    });
+
+    // Navigate using the resolved IP to prevent DNS rebinding
+    const parsed = new URL(url);
+    const ipUrl = new URL(url);
+    ipUrl.hostname = resolvedIp;
+
+    await page.setExtraHTTPHeaders({ Host: parsed.hostname });
+    await page.goto(ipUrl.toString(), {
       waitUntil: "networkidle2",
       timeout: BROWSER_TIMEOUT_MS,
     });
 
-    // Wait a beat for any lazy-loaded content
-    await new Promise((r) => setTimeout(r, 1000));
-
     // Extract article text — try multiple selectors
     const text = await page.evaluate(() => {
-      // Priority: <article>, [role="article"], <main>, then <body>
       const selectors = [
         "article",
         '[role="article"]',
@@ -243,12 +336,17 @@ async function fetchWithBrowser(url: string): Promise<string> {
 
 export async function POST(request: NextRequest) {
   try {
-    const contentLength = request.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request too large." }, { status: 413 });
+    // Parse body with enforced byte limit
+    let body: { url: string };
+    try {
+      body = await parseJsonBody(request, MAX_BODY_BYTES);
+    } catch (err) {
+      if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+        return NextResponse.json({ error: "Request too large." }, { status: 413 });
+      }
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
 
-    const body = await request.json();
     const { url } = body;
 
     if (!url || typeof url !== "string" || !/^https?:\/\/.+/.test(url)) {
@@ -259,6 +357,19 @@ export async function POST(request: NextRequest) {
     }
 
     if (isBlockedUrl(url)) {
+      return NextResponse.json(
+        { error: "Invalid URL provided." },
+        { status: 400 }
+      );
+    }
+
+    // SECURITY: Resolve DNS and validate the resolved IP BEFORE any fetch.
+    // Prevents DNS rebinding / TOCTOU attacks.
+    let resolvedIp: string;
+    try {
+      const resolved = await resolveAndValidate(url);
+      resolvedIp = resolved.resolvedIp;
+    } catch {
       return NextResponse.json(
         { error: "Invalid URL provided." },
         { status: 400 }
@@ -287,7 +398,7 @@ export async function POST(request: NextRequest) {
         }
       }
     } else {
-      // Articles: Jina → Readability → Headless Chromium
+      // Articles: Jina → Readability (DNS-pinned) → Headless Chromium (sandboxed)
       let method = "";
       try {
         content = await fetchWithJina(url);
@@ -296,13 +407,13 @@ export async function POST(request: NextRequest) {
         console.warn("Tier 1 (Jina) failed:", jinaError);
 
         try {
-          content = await fetchWithReadability(url);
+          content = await fetchWithReadability(url, resolvedIp);
           method = "readability";
         } catch (readabilityError) {
           console.warn("Tier 2 (Readability) failed:", readabilityError);
 
           try {
-            content = await fetchWithBrowser(url);
+            content = await fetchWithBrowser(url, resolvedIp);
             method = "browser";
           } catch (browserError) {
             console.warn("Tier 3 (Browser) failed:", browserError);

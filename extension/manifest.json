@@ -10,7 +10,7 @@
     "storage"
   ],
   "host_permissions": [
-    "https://news-lens-git-main-saganwazeds-projects.vercel.app/api/*"
+    "https://candor.app/api/*"
   ],
   "action": {
     "default_popup": "popup.html",

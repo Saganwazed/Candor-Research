@@ -1,7 +1,12 @@
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-const API_BASE = "https://news-lens-git-main-saganwazeds-projects.vercel.app";
-const API_ANALYZE = `${API_BASE}/api/analyze`;
+// Production URL. For development, override via chrome.storage.local.set({ api_base_override: "http://localhost:3000" })
+const DEFAULT_API_BASE = "https://candor.app";
+
+async function getApiBase() {
+  const { api_base_override } = await chrome.storage.local.get("api_base_override");
+  return api_base_override || DEFAULT_API_BASE;
+}
 
 // ─── Message Handler ──────────────────────────────────────────────────────────
 
@@ -48,7 +53,8 @@ async function handleAnalyze(tabId, isTwitter) {
 
   // Step 4: Call Candor API
   try {
-    const response = await fetch(API_ANALYZE, {
+    const apiBase = await getApiBase();
+    const response = await fetch(`${apiBase}/api/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "text", text, isTwitter }),

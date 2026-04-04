@@ -6,34 +6,43 @@ import {
 } from "@/lib/share";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAnalysis } from "@/lib/sign";
+import { getClientIp } from "@/lib/client-ip";
+import { getSignedSessionId } from "@/lib/session";
+import { parseJsonBody } from "@/lib/safe-body";
 
 export const runtime = "nodejs";
 
 const MAX_BODY_BYTES = 32_768;
 const SHARE_ID_PATTERN = /^[\w-]{6,24}$/;
 
-function getClientIp(request: NextRequest): string {
-  if (request.ip) return request.ip;
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp;
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const ips = forwardedFor.split(",").map((ip) => ip.trim());
-    return ips[ips.length - 1] || "unknown";
-  }
-  return "unknown";
-}
-
-function getSessionId(request: NextRequest): string | null {
-  return request.cookies.get("candor_session")?.value ?? null;
+/**
+ * Verify CSRF token: the x-csrf-token header must match the candor_csrf cookie.
+ * (Double-submit cookie pattern)
+ */
+function verifyCsrf(request: NextRequest): boolean {
+  const csrfCookie = request.cookies.get("candor_csrf")?.value;
+  const csrfHeader = request.headers.get("x-csrf-token");
+  if (!csrfCookie || !csrfHeader) return false;
+  return csrfCookie === csrfHeader;
 }
 
 // POST — Create a shared report
 export async function POST(request: NextRequest) {
   try {
-    const contentLength = request.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_BYTES) {
-      return NextResponse.json({ error: "Request too large." }, { status: 413 });
+    // Parse body with enforced byte limit
+    let body: {
+      analysis: unknown;
+      source_url?: string;
+      article_title?: string;
+      token?: string;
+    };
+    try {
+      body = await parseJsonBody(request, MAX_BODY_BYTES);
+    } catch (err) {
+      if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+        return NextResponse.json({ error: "Request too large." }, { status: 413 });
+      }
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
 
     const ip = getClientIp(request);
@@ -45,13 +54,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { analysis, source_url, article_title, token } = body as {
-      analysis: unknown;
-      source_url?: string;
-      article_title?: string;
-      token?: string;
-    };
+    const { analysis, source_url, article_title, token } = body;
 
     // Validate the analysis payload
     const parsed = AnalysisResponseSchema.safeParse(analysis);
@@ -70,7 +73,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const sessionId = getSessionId(request);
+    // Use signed session cookie (null if not present — still allowed for new users)
+    const sessionId = getSignedSessionId(request);
 
     const result = await createSharedReport(
       parsed.data,
@@ -94,14 +98,29 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// PATCH — Toggle visibility
+// PATCH — Toggle visibility (requires signed session + CSRF)
 export async function PATCH(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { share_id, is_public } = body as {
-      share_id: string;
-      is_public: boolean;
-    };
+    // CSRF verification (double-submit cookie pattern)
+    if (!verifyCsrf(request)) {
+      return NextResponse.json(
+        { error: "Invalid CSRF token." },
+        { status: 403 }
+      );
+    }
+
+    // Parse body with enforced byte limit
+    let body: { share_id: string; is_public: boolean };
+    try {
+      body = await parseJsonBody(request, MAX_BODY_BYTES);
+    } catch (err) {
+      if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+        return NextResponse.json({ error: "Request too large." }, { status: 413 });
+      }
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+    }
+
+    const { share_id, is_public } = body;
 
     if (!share_id || typeof is_public !== "boolean" || !SHARE_ID_PATTERN.test(share_id)) {
       return NextResponse.json(
@@ -110,7 +129,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const sessionId = getSessionId(request);
+    // Require signed session cookie for ownership verification
+    const sessionId = getSignedSessionId(request);
     if (!sessionId) {
       return NextResponse.json(
         { error: "Unauthorized." },

@@ -3,6 +3,8 @@ import { AnalysisResponseSchema } from "@/lib/schema";
 import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/prompt";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { signAnalysis } from "@/lib/sign";
+import { getClientIp } from "@/lib/client-ip";
+import { parseJsonBody } from "@/lib/safe-body";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -12,21 +14,7 @@ const MAX_ARTICLE_WORDS = 9000;
 const AI_INFERENCE_TIMEOUT_MS = 25000;
 const MIN_TEXT_CHARS = 150;
 const MIN_TEXT_CHARS_TWITTER = 10;
-
-function getClientIp(request: NextRequest): string {
-  if (request.ip) return request.ip;
-
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp;
-
-  const forwardedFor = request.headers.get("x-forwarded-for");
-  if (forwardedFor) {
-    const ips = forwardedFor.split(",").map((ip) => ip.trim());
-    return ips[ips.length - 1] || "unknown";
-  }
-
-  return "unknown";
-}
+const MAX_BODY_BYTES = 500_000;
 
 function truncateToWordLimit(text: string, maxWords: number): { text: string; wasTruncated: boolean } {
   const words = text.split(/\s+/);
@@ -97,7 +85,7 @@ async function analyzeWithAI(
 
 export async function POST(request: NextRequest) {
   try {
-    // Rate limiting
+    // Rate limiting (uses fixed getClientIp — no IP spoofing)
     const ip = getClientIp(request);
     const rateLimit = await checkRateLimit(ip);
     if (!rateLimit.allowed) {
@@ -116,18 +104,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const contentLength = request.headers.get("content-length");
-    if (contentLength && parseInt(contentLength, 10) > 500_000) {
-      return NextResponse.json({ error: "Request too large." }, { status: 413 });
+    // Parse body with enforced byte limit (not just Content-Length header)
+    let body: { mode: "text"; text?: string; isTwitter?: boolean };
+    try {
+      body = await parseJsonBody(request, MAX_BODY_BYTES);
+    } catch (err) {
+      if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+        return NextResponse.json({ error: "Request too large." }, { status: 413 });
+      }
+      return NextResponse.json({ error: "Invalid request." }, { status: 400 });
     }
 
-    const body = await request.json();
-    const { mode, text, isTwitter } = body as {
-      mode: "text";
-      text?: string;
-      isTwitter?: boolean;
-    };
-
+    const { mode, text, isTwitter } = body;
     const minChars = isTwitter ? MIN_TEXT_CHARS_TWITTER : MIN_TEXT_CHARS;
 
     if (mode !== "text" || !text || text.length < minChars) {

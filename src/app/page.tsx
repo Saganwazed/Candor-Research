@@ -9,6 +9,7 @@ import Disclaimer from "@/components/Disclaimer";
 import ThemeToggle from "@/components/ThemeToggle";
 import ShareModal from "@/components/ShareModal";
 import ExtensionBanner from "@/components/ExtensionBanner";
+import { useAnalyticsEvents } from "@/lib/posthog-events";
 
 export default function Home() {
   const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
@@ -27,6 +28,9 @@ export default function Home() {
   const [lastSourceUrl, setLastSourceUrl] = useState<string | null>(null);
   // HMAC token from analyze response — proves the report is server-generated
   const [analysisToken, setAnalysisToken] = useState<string | null>(null);
+
+  // PostHog analytics
+  const { trackAnalysis, trackAnalysisError, trackFetchError, trackShareCreated } = useAnalyticsEvents();
 
   async function handleAnalyze(mode: "url" | "text", value: string) {
     setFetchStatus(mode === "url" ? "fetching" : "analyzing");
@@ -49,10 +53,9 @@ export default function Home() {
         const fetchData = await fetchRes.json();
 
         if (!fetchRes.ok) {
-          setError(
-            fetchData.error ||
-              "Could not retrieve article content. The site may block automated access."
-          );
+          const errorMsg = fetchData.error || "Could not retrieve article content. The site may block automated access.";
+          setError(errorMsg);
+          trackFetchError(errorMsg);
           setFetchStatus("");
           return;
         }
@@ -72,14 +75,21 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Something went wrong. Try again.");
+        const errorMsg = data.error || "Something went wrong. Try again.";
+        setError(errorMsg);
+        trackAnalysisError(mode, errorMsg);
         return;
       }
 
       setAnalysis(data.analysis);
       setAnalysisToken(data.token ?? null);
-    } catch {
-      setError("Could not connect to the server. Try again.");
+
+      // Track successful analysis
+      trackAnalysis(mode, data.analysis?.bias_direction);
+    } catch (err) {
+      const errorMsg = "Could not connect to the server. Try again.";
+      setError(errorMsg);
+      trackAnalysisError(mode, errorMsg);
     } finally {
       setFetchStatus("");
     }
@@ -120,7 +130,10 @@ export default function Home() {
         publicUrl: data.public_url,
       });
       setShowShareModal(true);
-    } catch {
+
+      // Track share creation
+      trackShareCreated(analysis?.bias_direction);
+    } catch (err) {
       setError("Could not create share link. Try again.");
     } finally {
       setIsSharing(false);
@@ -130,9 +143,18 @@ export default function Home() {
   async function handleToggleVisibility(isPublic: boolean) {
     if (!shareData) return;
 
+    // Read CSRF token from cookie (double-submit pattern)
+    const csrfToken = document.cookie
+      .split("; ")
+      .find((c) => c.startsWith("candor_csrf="))
+      ?.split("=")[1] ?? "";
+
     const response = await fetch("/api/share", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
       body: JSON.stringify({
         share_id: shareData.shareId,
         is_public: isPublic,

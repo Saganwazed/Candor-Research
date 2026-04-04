@@ -1,27 +1,37 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { usePostHog } from "posthog-js/react";
 
 export default function FeedbackBar() {
   const [selected, setSelected] = useState<"helpful" | "not-helpful" | null>(
     null
   );
+  const posthog = usePostHog();
 
-  const submitFeedback = useCallback(async (useful: boolean) => {
-    const sessionId =
-      sessionStorage.getItem("candor_session_id") || generateSessionId();
-    sessionStorage.setItem("candor_session_id", sessionId);
+  const submitFeedback = useCallback(
+    async (useful: boolean) => {
+      const sessionId =
+        sessionStorage.getItem("candor_session_id") || generateSessionId();
+      sessionStorage.setItem("candor_session_id", sessionId);
 
-    try {
-      await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, useful }),
+      // Track feedback with PostHog
+      posthog.capture("feedback_submitted", {
+        feedback_type: useful ? "helpful" : "not_helpful",
       });
-    } catch {
-      // Silent failure for feedback — not critical
-    }
-  }, []);
+
+      try {
+        await fetch("/api/feedback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ session_id: sessionId, useful }),
+        });
+      } catch {
+        // Silent failure for feedback — not critical
+      }
+    },
+    [posthog]
+  );
 
   function handleSelect(choice: "helpful" | "not-helpful") {
     if (selected) return; // Already selected

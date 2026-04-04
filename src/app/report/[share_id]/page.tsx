@@ -6,6 +6,7 @@ import BiasDirection from "@/components/BiasDirection";
 import CredibilityFlags from "@/components/CredibilityFlags";
 import HiddenAgenda from "@/components/HiddenAgenda";
 import ConversionFooter from "@/components/ConversionFooter";
+import SharedReportTracker from "@/components/SharedReportTracker";
 
 interface PageProps {
   params: { share_id: string };
@@ -70,7 +71,8 @@ export default async function SharedReportPage({ params }: PageProps) {
   const snapshot = report.report_snapshot;
 
   return (
-    <main className="page-container">
+    <SharedReportTracker shareId={params.share_id}>
+      <main className="page-container">
       {/* Header — Wordmark linked to homepage */}
       <header>
         <a href="/" className="shared-report-wordmark-link">
@@ -131,5 +133,6 @@ export default async function SharedReportPage({ params }: PageProps) {
       {/* Conversion Footer */}
       <ConversionFooter />
     </main>
+    </SharedReportTracker>
   );
 }
