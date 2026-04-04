@@ -86,7 +86,7 @@ export default function Home() {
 
       // Track successful analysis
       trackAnalysis(mode, data.analysis?.bias_direction);
-    } catch (err) {
+    } catch {
       const errorMsg = "Could not connect to the server. Try again.";
       setError(errorMsg);
       trackAnalysisError(mode, errorMsg);
@@ -133,7 +133,7 @@ export default function Home() {
 
       // Track share creation
       trackShareCreated(analysis?.bias_direction);
-    } catch (err) {
+    } catch {
       setError("Could not create share link. Try again.");
     } finally {
       setIsSharing(false);
