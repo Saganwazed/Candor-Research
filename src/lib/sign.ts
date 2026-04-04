@@ -1,10 +1,23 @@
 import { createHmac } from "crypto";
 import type { AnalysisResponse } from "./schema";
 
-const SECRET = process.env.SHARE_SECRET || process.env.GOOGLE_GEMINI_API_KEY || "candor-dev";
+/**
+ * SHARE_SECRET must be a dedicated, high-entropy secret (min 32 random bytes).
+ * No fallback to API keys or hardcoded strings — fail hard if missing.
+ */
+function getSecret(): string {
+  const secret = process.env.SHARE_SECRET;
+  if (!secret) {
+    throw new Error(
+      "SHARE_SECRET environment variable is required. " +
+      "Generate one with: openssl rand -base64 32"
+    );
+  }
+  return secret;
+}
 
 export function signAnalysis(analysis: AnalysisResponse): string {
-  return createHmac("sha256", SECRET)
+  return createHmac("sha256", getSecret())
     .update(JSON.stringify(analysis))
     .digest("hex");
 }

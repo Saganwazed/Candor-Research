@@ -9,10 +9,13 @@ const securityHeaders = [
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // 'unsafe-eval' removed — only needed in dev mode (Next.js HMR).
+      // 'unsafe-inline' kept because Next.js requires it for inline styles/scripts.
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
-      "connect-src 'self'",
+      // PostHog analytics + Supabase API
+      "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com",
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
