@@ -18,6 +18,7 @@ node_modules/
 
 # env files
 .env*.local
+.env.sentry-build-plugin
 
 # misc
 .DS_Store

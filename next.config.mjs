@@ -20,6 +20,9 @@ const securityHeaders = [
       "connect-src 'self' https://us.i.posthog.com https://us-assets.i.posthog.com https://o4511163749695488.ingest.us.sentry.io",
       "font-src 'self'",
       "frame-ancestors 'none'",
+      // Required for Session Replay Web Worker compression
+      "worker-src 'self' blob:",
+      "child-src 'self' blob:",
     ].join("; "),
   },
 ];
@@ -39,14 +42,18 @@ const nextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  // For all available options, see:
-  // https://github.com/getsentry/sentry-webpack-plugin#options
   org: "sagan-chowdhury",
   project: "javascript-nextjs",
 
-  // Only print logs for uploading source maps related to errors
-  silent: true,
+  // Source map upload auth token (set in .env.sentry-build-plugin or CI)
+  authToken: process.env.SENTRY_AUTH_TOKEN,
 
-  // Hides source maps from generated client bundles
-  hideSourceMaps: true,
+  // Upload wider set of client source files for better stack trace resolution
+  widenClientFileUpload: true,
+
+  // Create a proxy API route to bypass ad-blockers
+  tunnelRoute: "/monitoring",
+
+  // Suppress non-CI output
+  silent: !process.env.CI,
 });

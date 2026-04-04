@@ -1,22 +1,19 @@
 import * as Sentry from "@sentry/nextjs";
 
 Sentry.init({
-  dsn: "https://6afb47272e805e7f887ab7750c181a32@o4511163749695488.ingest.us.sentry.io/4511163751464960",
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
 
-  // Tracing
-  tracesSampleRate: 1.0,
+  sendDefaultPii: true,
 
-  // Session Replay
+  // 100% in dev, 10% in production
+  tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
+
+  // Session Replay: 10% of all sessions, 100% of sessions with errors
   replaysSessionSampleRate: 0.1,
   replaysOnErrorSampleRate: 1.0,
 
-  // Environment
-  environment: process.env.NODE_ENV,
+  enableLogs: true,
 
-  // Release (optional, but recommended)
-  release: process.env.NEXT_PUBLIC_APP_VERSION || "unknown",
-
-  // Integrations
   integrations: [
     Sentry.replayIntegration({
       maskAllText: true,
@@ -25,10 +22,7 @@ Sentry.init({
     // Send console.log, console.warn, and console.error calls as logs to Sentry
     Sentry.consoleLoggingIntegration({ levels: ["log", "warn", "error"] }),
   ],
-
-  // Enable logs to be sent to Sentry
-  enableLogs: true,
 });
 
-// Required for tracing navigations in App Router
+// Hook into App Router navigation transitions (App Router only)
 export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;
