@@ -1,3 +1,5 @@
+import { withSentryConfig } from "@sentry/nextjs";
+
 /** @type {import('next').NextConfig} */
 
 const securityHeaders = [
@@ -12,7 +14,7 @@ const securityHeaders = [
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' https://o4511163749695488.ingest.us.sentry.io",
       "font-src 'self'",
       "frame-ancestors 'none'",
     ].join("; "),
@@ -33,4 +35,15 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // For all available options, see:
+  // https://github.com/getsentry/sentry-webpack-plugin#options
+  org: "sagan-chowdhury",
+  project: "javascript-nextjs",
+
+  // Only print logs for uploading source maps related to errors
+  silent: true,
+
+  // Hides source maps from generated client bundles
+  hideSourceMaps: true,
+});
