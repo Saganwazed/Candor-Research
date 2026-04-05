@@ -11,6 +11,17 @@ import ShareModal from "@/components/ShareModal";
 import ExtensionBanner from "@/components/ExtensionBanner";
 import { useAnalyticsEvents } from "@/lib/posthog-events";
 
+// Helper to safely extract cookie value (prevents name collision issues)
+function getCookieValue(name: string): string {
+  const nameEq = name + "=";
+  for (const cookie of document.cookie.split("; ")) {
+    if (cookie.startsWith(nameEq)) {
+      return cookie.substring(nameEq.length);
+    }
+  }
+  return "";
+}
+
 export default function Home() {
   const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
@@ -107,9 +118,15 @@ export default function Home() {
     setIsSharing(true);
 
     try {
+      // Read CSRF token from cookie (double-submit pattern)
+      const csrfToken = getCookieValue("candor_csrf");
+
       const response = await fetch("/api/share", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
         body: JSON.stringify({
           analysis,
           source_url: lastSourceUrl,
@@ -144,10 +161,7 @@ export default function Home() {
     if (!shareData) return;
 
     // Read CSRF token from cookie (double-submit pattern)
-    const csrfToken = document.cookie
-      .split("; ")
-      .find((c) => c.startsWith("candor_csrf="))
-      ?.split("=")[1] ?? "";
+    const csrfToken = getCookieValue("candor_csrf");
 
     const response = await fetch("/api/share", {
       method: "PATCH",
