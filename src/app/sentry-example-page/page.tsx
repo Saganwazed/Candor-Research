@@ -1,13 +1,9 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
-import { useState } from "react";
 
 export default function SentryExamplePage() {
-  const [hasThrownError, setHasThrownError] = useState(false);
-
   const throwError = () => {
-    setHasThrownError(true);
     throw new Error("Sentry Example Frontend Error");
   };
 
