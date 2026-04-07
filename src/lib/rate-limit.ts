@@ -12,6 +12,11 @@ export async function checkRateLimit(ip: string): Promise<{
   remaining: number;
   resetAt: number;
 }> {
+  // Skip rate limiting when Supabase is not configured (e.g. local dev)
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { allowed: true, remaining: MAX_REQUESTS, resetAt: Date.now() + WINDOW_MS };
+  }
+
   const supabase = createApiClient();
 
   const { data, error } = await supabase.rpc("check_and_increment_rate_limit", {
