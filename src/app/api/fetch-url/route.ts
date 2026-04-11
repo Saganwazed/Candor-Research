@@ -20,6 +20,15 @@ function isBlockedIp(ip: string): boolean {
   if (["127.0.0.1", "::1", "0.0.0.0", "::"].includes(ip)) return true;
   if (ip.startsWith("169.254.")) return true; // Link-local + AWS metadata
 
+  // IPv6-mapped IPv4 (e.g. ::ffff:127.0.0.1) — extract the IPv4 part and recheck
+  const mappedV4 = ip.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  if (mappedV4) return isBlockedIp(mappedV4[1]);
+
+  // IPv6 private/reserved ranges
+  if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // fc00::/7 Unique Local
+  if (ip.startsWith("fe80")) return true; // fe80::/10 Link-local
+  if (ip.startsWith("::ffff:")) return true; // Any remaining mapped addresses
+
   const ipv4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (ipv4) {
     const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
@@ -154,8 +163,8 @@ async function fetchWithJina(url: string): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    // Properly encode the URL in the Jina Reader path
-    const response = await fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
+    // Jina Reader expects the raw URL as a path segment (not percent-encoded)
+    const response = await fetch(`https://r.jina.ai/${url}`, {
       method: "GET",
       headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
@@ -178,7 +187,9 @@ async function fetchWithJina(url: string): Promise<string> {
 
 // ─── Tier 2: Direct fetch + Mozilla Readability (DNS-pinned) ───────────────
 
-async function fetchWithReadability(url: string, resolvedIp: string): Promise<string> {
+const MAX_REDIRECTS = 5;
+
+async function fetchWithReadability(url: string, resolvedIp: string, redirectCount = 0): Promise<string> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -202,6 +213,9 @@ async function fetchWithReadability(url: string, resolvedIp: string): Promise<st
 
     // Handle redirects manually — re-validate the redirect target
     if (response.status >= 300 && response.status < 400) {
+      if (redirectCount >= MAX_REDIRECTS) {
+        throw new Error("Too many redirects");
+      }
       const location = response.headers.get("location");
       if (location) {
         const redirectUrl = new URL(location, url).toString();
@@ -210,7 +224,7 @@ async function fetchWithReadability(url: string, resolvedIp: string): Promise<st
         }
         // Re-resolve DNS for the redirect target
         const { resolvedIp: newIp } = await resolveAndValidate(redirectUrl);
-        return fetchWithReadability(redirectUrl, newIp);
+        return fetchWithReadability(redirectUrl, newIp, redirectCount + 1);
       }
     }
 

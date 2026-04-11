@@ -28,9 +28,7 @@ const securityHeaders = [
 ];
 
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ["jsdom", "@mozilla/readability"],
-  },
+  serverExternalPackages: ["jsdom", "@mozilla/readability"],
   async headers() {
     return [
       {
