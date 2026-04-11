@@ -24,8 +24,9 @@ export default function Home() {
   } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
 
-  // Track source URL for share context
+  // Track source URL and article title for share context
   const [lastSourceUrl, setLastSourceUrl] = useState<string | null>(null);
+  const [lastArticleTitle, setLastArticleTitle] = useState<string | null>(null);
   // HMAC token from analyze response — proves the report is server-generated
   const [analysisToken, setAnalysisToken] = useState<string | null>(null);
 
@@ -39,6 +40,7 @@ export default function Home() {
     setShareData(null);
     setAnalysisToken(null);
     setLastSourceUrl(mode === "url" ? value : null);
+    setLastArticleTitle(null);
 
     try {
       let articleText = value;
@@ -61,6 +63,7 @@ export default function Home() {
         }
 
         articleText = fetchData.content;
+        if (fetchData.title) setLastArticleTitle(fetchData.title);
         setFetchStatus("analyzing");
       }
 
@@ -107,13 +110,22 @@ export default function Home() {
     setIsSharing(true);
 
     try {
+      // Read CSRF token from cookie (double-submit pattern)
+      const csrfToken = document.cookie
+        .split("; ")
+        .find((c) => c.startsWith("candor_csrf="))
+        ?.split("=")[1] ?? "";
+
       const response = await fetch("/api/share", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
         body: JSON.stringify({
           analysis,
           source_url: lastSourceUrl,
-          article_title: null,
+          article_title: lastArticleTitle,
           token: analysisToken,
         }),
       });
@@ -213,7 +225,7 @@ export default function Home() {
       {showShareModal && shareData && analysis && (
         <ShareModal
           publicUrl={shareData.publicUrl}
-          articleTitle={null}
+          articleTitle={lastArticleTitle}
           onClose={() => setShowShareModal(false)}
           onToggleVisibility={handleToggleVisibility}
         />

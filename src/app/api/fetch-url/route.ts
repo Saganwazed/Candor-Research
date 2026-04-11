@@ -189,7 +189,7 @@ async function fetchWithJina(url: string): Promise<string> {
 
 const MAX_REDIRECTS = 5;
 
-async function fetchWithReadability(url: string, resolvedIp: string, redirectCount = 0): Promise<string> {
+async function fetchWithReadability(url: string, resolvedIp: string, redirectCount = 0): Promise<{ content: string; title: string | null }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -249,7 +249,7 @@ async function fetchWithReadability(url: string, resolvedIp: string, redirectCou
       throw new Error("Readability could not extract article content");
     }
 
-    return article.textContent.trim();
+    return { content: article.textContent.trim(), title: article.title || null };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -258,7 +258,7 @@ async function fetchWithReadability(url: string, resolvedIp: string, redirectCou
 // ─── Tier 3: Headless Chromium (catches JS-heavy / bot-protected sites) ─────
 // JavaScript is DISABLED and requests are intercepted to prevent SSRF.
 
-async function fetchWithBrowser(url: string, resolvedIp: string): Promise<string> {
+async function fetchWithBrowser(url: string, resolvedIp: string): Promise<{ content: string; title: string | null }> {
   // Dynamic imports — heavy deps only loaded as last resort
   const chromium = (await import("@sparticuz/chromium")).default;
   const puppeteer = await import("puppeteer-core");
@@ -340,7 +340,9 @@ async function fetchWithBrowser(url: string, resolvedIp: string): Promise<string
       throw new Error("Browser extraction returned insufficient content");
     }
 
-    return text;
+    const title = await page.title();
+
+    return { content: text, title: title || null };
   } finally {
     await browser.close();
   }
@@ -391,6 +393,7 @@ export async function POST(request: NextRequest) {
     }
 
     let content = "";
+    let title: string | null = null;
     const isTwitter = isTwitterUrl(url);
 
     if (isTwitter) {
@@ -421,13 +424,17 @@ export async function POST(request: NextRequest) {
         console.warn("Tier 1 (Jina) failed:", jinaError);
 
         try {
-          content = await fetchWithReadability(url, resolvedIp);
+          const result = await fetchWithReadability(url, resolvedIp);
+          content = result.content;
+          title = result.title;
           method = "readability";
         } catch (readabilityError) {
           console.warn("Tier 2 (Readability) failed:", readabilityError);
 
           try {
-            content = await fetchWithBrowser(url, resolvedIp);
+            const result = await fetchWithBrowser(url, resolvedIp);
+            content = result.content;
+            title = result.title;
             method = "browser";
           } catch (browserError) {
             console.warn("Tier 3 (Browser) failed:", browserError);
@@ -453,7 +460,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ content, isTwitter });
+    return NextResponse.json({ content, isTwitter, title });
   } catch (error) {
     console.error("fetch-url route error:", error);
     return NextResponse.json(
