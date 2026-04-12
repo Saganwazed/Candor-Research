@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import type { AnalysisResponse } from "./schema";
 
 /**
@@ -25,10 +25,9 @@ export function signAnalysis(analysis: AnalysisResponse): string {
 export function verifyAnalysis(analysis: AnalysisResponse, token: string): boolean {
   const expected = signAnalysis(analysis);
   if (expected.length !== token.length) return false;
-  // Constant-time comparison
-  let mismatch = 0;
-  for (let i = 0; i < expected.length; i++) {
-    mismatch |= expected.charCodeAt(i) ^ token.charCodeAt(i);
+  try {
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(token));
+  } catch {
+    return false;
   }
-  return mismatch === 0;
 }
