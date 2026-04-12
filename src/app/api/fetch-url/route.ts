@@ -20,6 +20,15 @@ function isBlockedIp(ip: string): boolean {
   if (["127.0.0.1", "::1", "0.0.0.0", "::"].includes(ip)) return true;
   if (ip.startsWith("169.254.")) return true; // Link-local + AWS metadata
 
+  // IPv6-mapped IPv4 (e.g. ::ffff:127.0.0.1) — extract the IPv4 part and recheck
+  const mappedV4 = ip.match(/^::ffff:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/i);
+  if (mappedV4) return isBlockedIp(mappedV4[1]);
+
+  // IPv6 private/reserved ranges
+  if (ip.startsWith("fc") || ip.startsWith("fd")) return true; // fc00::/7 Unique Local
+  if (ip.startsWith("fe80")) return true; // fe80::/10 Link-local
+  if (ip.startsWith("::ffff:")) return true; // Any remaining mapped addresses
+
   const ipv4 = ip.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (ipv4) {
     const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
@@ -154,8 +163,8 @@ async function fetchWithJina(url: string): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
   try {
-    // Properly encode the URL in the Jina Reader path
-    const response = await fetch(`https://r.jina.ai/${encodeURIComponent(url)}`, {
+    // Jina Reader expects the raw URL as a path segment (not percent-encoded)
+    const response = await fetch(`https://r.jina.ai/${url}`, {
       method: "GET",
       headers: { "User-Agent": USER_AGENT },
       signal: controller.signal,
@@ -178,7 +187,9 @@ async function fetchWithJina(url: string): Promise<string> {
 
 // ─── Tier 2: Direct fetch + Mozilla Readability (DNS-pinned) ───────────────
 
-async function fetchWithReadability(url: string, resolvedIp: string): Promise<string> {
+const MAX_REDIRECTS = 5;
+
+async function fetchWithReadability(url: string, resolvedIp: string, redirectCount = 0): Promise<{ content: string; title: string | null }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
@@ -202,6 +213,9 @@ async function fetchWithReadability(url: string, resolvedIp: string): Promise<st
 
     // Handle redirects manually — re-validate the redirect target
     if (response.status >= 300 && response.status < 400) {
+      if (redirectCount >= MAX_REDIRECTS) {
+        throw new Error("Too many redirects");
+      }
       const location = response.headers.get("location");
       if (location) {
         const redirectUrl = new URL(location, url).toString();
@@ -210,7 +224,7 @@ async function fetchWithReadability(url: string, resolvedIp: string): Promise<st
         }
         // Re-resolve DNS for the redirect target
         const { resolvedIp: newIp } = await resolveAndValidate(redirectUrl);
-        return fetchWithReadability(redirectUrl, newIp);
+        return fetchWithReadability(redirectUrl, newIp, redirectCount + 1);
       }
     }
 
@@ -235,7 +249,7 @@ async function fetchWithReadability(url: string, resolvedIp: string): Promise<st
       throw new Error("Readability could not extract article content");
     }
 
-    return article.textContent.trim();
+    return { content: article.textContent.trim(), title: article.title || null };
   } finally {
     clearTimeout(timeoutId);
   }
@@ -244,7 +258,7 @@ async function fetchWithReadability(url: string, resolvedIp: string): Promise<st
 // ─── Tier 3: Headless Chromium (catches JS-heavy / bot-protected sites) ─────
 // JavaScript is DISABLED and requests are intercepted to prevent SSRF.
 
-async function fetchWithBrowser(url: string, resolvedIp: string): Promise<string> {
+async function fetchWithBrowser(url: string, resolvedIp: string): Promise<{ content: string; title: string | null }> {
   // Dynamic imports — heavy deps only loaded as last resort
   const chromium = (await import("@sparticuz/chromium")).default;
   const puppeteer = await import("puppeteer-core");
@@ -326,7 +340,9 @@ async function fetchWithBrowser(url: string, resolvedIp: string): Promise<string
       throw new Error("Browser extraction returned insufficient content");
     }
 
-    return text;
+    const title = await page.title();
+
+    return { content: text, title: title || null };
   } finally {
     await browser.close();
   }
@@ -377,6 +393,7 @@ export async function POST(request: NextRequest) {
     }
 
     let content = "";
+    let title: string | null = null;
     const isTwitter = isTwitterUrl(url);
 
     if (isTwitter) {
@@ -407,13 +424,17 @@ export async function POST(request: NextRequest) {
         console.warn("Tier 1 (Jina) failed:", jinaError);
 
         try {
-          content = await fetchWithReadability(url, resolvedIp);
+          const result = await fetchWithReadability(url, resolvedIp);
+          content = result.content;
+          title = result.title;
           method = "readability";
         } catch (readabilityError) {
           console.warn("Tier 2 (Readability) failed:", readabilityError);
 
           try {
-            content = await fetchWithBrowser(url, resolvedIp);
+            const result = await fetchWithBrowser(url, resolvedIp);
+            content = result.content;
+            title = result.title;
             method = "browser";
           } catch (browserError) {
             console.warn("Tier 3 (Browser) failed:", browserError);
@@ -439,7 +460,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ content, isTwitter });
+    return NextResponse.json({ content, isTwitter, title });
   } catch (error) {
     console.error("fetch-url route error:", error);
     return NextResponse.json(

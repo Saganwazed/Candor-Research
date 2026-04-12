@@ -136,7 +136,7 @@ export async function toggleReportVisibility(
 
   const { count } = await supabase
     .from("shared_reports")
-    .update({ is_public: isPublic })
+    .update({ is_public: isPublic }, { count: "exact" })
     .eq("share_id", shareId)
     .eq("creator_session_id", sessionId);
 

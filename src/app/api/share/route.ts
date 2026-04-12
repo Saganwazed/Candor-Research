@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { AnalysisResponseSchema } from "@/lib/schema";
 import {
   createSharedReport,
@@ -7,7 +8,7 @@ import {
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyAnalysis } from "@/lib/sign";
 import { getClientIp } from "@/lib/client-ip";
-import { getSignedSessionId } from "@/lib/session";
+import { getSignedSessionId, setSignedSessionCookie } from "@/lib/session";
 import { parseJsonBody } from "@/lib/safe-body";
 
 export const runtime = "nodejs";
@@ -29,6 +30,14 @@ function verifyCsrf(request: NextRequest): boolean {
 // POST — Create a shared report
 export async function POST(request: NextRequest) {
   try {
+    // CSRF verification (double-submit cookie pattern)
+    if (!verifyCsrf(request)) {
+      return NextResponse.json(
+        { error: "Invalid CSRF token." },
+        { status: 403 }
+      );
+    }
+
     // Parse body with enforced byte limit
     let body: {
       analysis: unknown;
@@ -73,8 +82,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use signed session cookie (null if not present — still allowed for new users)
-    const sessionId = getSignedSessionId(request);
+    // Get existing session ID or generate a new one
+    const existingSessionId = getSignedSessionId(request);
+    const sessionId = existingSessionId || randomUUID();
 
     const result = await createSharedReport(
       parsed.data,
@@ -86,10 +96,17 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
     const publicUrl = `${baseUrl}/report/${result.share_id}`;
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       { share_id: result.share_id, public_url: publicUrl },
       { status: 201 }
     );
+
+    // Set signed session cookie if the user doesn't have one yet
+    if (!existingSessionId) {
+      setSignedSessionCookie(response, sessionId);
+    }
+
+    return response;
   } catch {
     return NextResponse.json(
       { error: "Failed to create shared report." },
