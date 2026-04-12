@@ -23,6 +23,7 @@ export default function Home() {
     publicUrl: string;
   } | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [shareIsPublic, setShareIsPublic] = useState(true);
 
   // Track source URL and article title for share context
   const [lastSourceUrl, setLastSourceUrl] = useState<string | null>(null);
@@ -38,6 +39,7 @@ export default function Home() {
     setAnalysis(null);
     setError("");
     setShareData(null);
+    setShareIsPublic(true);
     setAnalysisToken(null);
     setLastSourceUrl(mode === "url" ? value : null);
     setLastArticleTitle(null);
@@ -176,6 +178,8 @@ export default function Home() {
     if (!response.ok) {
       throw new Error("Failed to toggle visibility");
     }
+
+    setShareIsPublic(isPublic);
   }
 
   return (
@@ -226,6 +230,7 @@ export default function Home() {
         <ShareModal
           publicUrl={shareData.publicUrl}
           articleTitle={lastArticleTitle}
+          isPublic={shareIsPublic}
           onClose={() => setShowShareModal(false)}
           onToggleVisibility={handleToggleVisibility}
         />

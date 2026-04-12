@@ -148,7 +148,7 @@ async function runAnalysis() {
     }
 
     // Detect Twitter/X
-    const isTwitter = /^https?:\/\/(www\.)?(twitter\.com|x\.com)\//i.test(tab.url);
+    const isTwitter = /^https?:\/\/(www\.|mobile\.)?(twitter\.com|x\.com)\//i.test(tab.url);
 
     // Check for cached result first (popup close recovery)
     const cached = await chrome.storage.session.get(`analysis_${tab.id}`);
@@ -245,18 +245,24 @@ document.addEventListener("DOMContentLoaded", () => {
     if (result.status === "loading" && Date.now() - result.timestamp < 30000) {
       showState("loading");
       startLoadingAnimation();
-      // Poll for result
+      // Poll for result (with 35s safety timeout)
       const poll = setInterval(async () => {
         const updated = await chrome.storage.session.get(`analysis_${tab.id}`);
         const r = updated[`analysis_${tab.id}`];
         if (r && r.status === "done") {
           clearInterval(poll);
+          clearTimeout(pollTimeout);
           renderReport(r.analysis);
         } else if (r && r.status === "error") {
           clearInterval(poll);
+          clearTimeout(pollTimeout);
           showError(r.error);
         }
       }, 500);
+      const pollTimeout = setTimeout(() => {
+        clearInterval(poll);
+        showError("Analysis timed out. Try again.");
+      }, 35000);
     } else if (result.status === "done" && Date.now() - result.timestamp < 120000) {
       renderReport(result.analysis);
     }

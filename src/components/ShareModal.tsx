@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 interface ShareModalProps {
   publicUrl: string;
   articleTitle: string | null;
+  isPublic: boolean;
   onClose: () => void;
   onToggleVisibility: (isPublic: boolean) => Promise<void>;
 }
@@ -12,11 +13,11 @@ interface ShareModalProps {
 export default function ShareModal({
   publicUrl,
   articleTitle,
+  isPublic,
   onClose,
   onToggleVisibility,
 }: ShareModalProps) {
   const [copied, setCopied] = useState(false);
-  const [isPublic, setIsPublic] = useState(true);
   const [toggling, setToggling] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -47,10 +48,8 @@ export default function ShareModal({
 
   async function handleToggle() {
     setToggling(true);
-    const newState = !isPublic;
     try {
-      await onToggleVisibility(newState);
-      setIsPublic(newState);
+      await onToggleVisibility(!isPublic);
     } catch {
       // Toggle failed — keep current state
     }
