@@ -1,17 +1,21 @@
 import { nanoid } from "nanoid";
 import { createApiClient } from "@/utils/supabase/api";
-import type { AnalysisResponse } from "./schema";
+import type { GraphAnalysisResponse } from "./schema";
 
 // --- Types ---
 
 export interface SharedReportSnapshot {
+  // graph data
+  nodes: GraphAnalysisResponse["nodes"];
+  edges: GraphAnalysisResponse["edges"];
+  claim_verdicts: GraphAnalysisResponse["claim_verdicts"];
+  overall_assessment: string;
+  // summary fields
   bias_summary: string;
   bias_direction: string;
-  bias_justification: string;
-  credibility_flags: Array<{ flag_type: string; description: string }>;
-  hidden_agenda: string;
   analysis_confidence: string;
   content_suitable: boolean;
+  // metadata
   article_title: string | null;
   source_domain: string | null;
   analyzed_at: string;
@@ -39,7 +43,7 @@ export function generateShareId(): string {
 // --- Snapshot Sanitization ---
 
 export function sanitizeSnapshot(
-  analysis: AnalysisResponse,
+  analysis: GraphAnalysisResponse,
   sourceUrl: string | null,
   articleTitle: string | null
 ): SharedReportSnapshot {
@@ -53,14 +57,12 @@ export function sanitizeSnapshot(
   }
 
   return {
+    nodes: analysis.nodes,
+    edges: analysis.edges,
+    claim_verdicts: analysis.claim_verdicts,
+    overall_assessment: analysis.overall_assessment,
     bias_summary: analysis.bias_summary,
     bias_direction: analysis.bias_direction,
-    bias_justification: analysis.bias_justification,
-    credibility_flags: analysis.credibility_flags.map((f) => ({
-      flag_type: f.flag_type,
-      description: f.description,
-    })),
-    hidden_agenda: analysis.hidden_agenda,
     analysis_confidence: analysis.analysis_confidence,
     content_suitable: analysis.content_suitable,
     article_title: articleTitle?.slice(0, 200) ?? null,
@@ -72,7 +74,7 @@ export function sanitizeSnapshot(
 // --- Public API ---
 
 export async function createSharedReport(
-  analysis: AnalysisResponse,
+  analysis: GraphAnalysisResponse,
   sourceUrl: string | null,
   articleTitle: string | null,
   sessionId: string | null
@@ -145,6 +147,5 @@ export async function toggleReportVisibility(
 
 export async function incrementViewCount(shareId: string): Promise<void> {
   const supabase = createApiClient();
-
   await supabase.rpc("increment_view_count", { p_share_id: shareId });
 }

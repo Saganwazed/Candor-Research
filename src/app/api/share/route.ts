@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { AnalysisResponseSchema } from "@/lib/schema";
+import { GraphAnalysisResponseSchema } from "@/lib/schema";
 import {
   createSharedReport,
   toggleReportVisibility,
@@ -13,7 +13,7 @@ import { parseJsonBody } from "@/lib/safe-body";
 
 export const runtime = "nodejs";
 
-const MAX_BODY_BYTES = 32_768;
+const MAX_BODY_BYTES = 131_072;
 const SHARE_ID_PATTERN = /^[\w-]{6,24}$/;
 
 /**
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     const { analysis, source_url, article_title, token } = body;
 
     // Validate the analysis payload
-    const parsed = AnalysisResponseSchema.safeParse(analysis);
+    const parsed = GraphAnalysisResponseSchema.safeParse(analysis);
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid report data." },

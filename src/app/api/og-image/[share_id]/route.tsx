@@ -23,7 +23,7 @@ export async function GET(
 
   const snapshot = report.report_snapshot;
   const position = POSITION_MAP[snapshot.bias_direction] ?? 50;
-  const flagCount = snapshot.credibility_flags.length;
+  const claimCount = (snapshot as { claim_verdicts?: unknown[] }).claim_verdicts?.length ?? 0;
 
   return new ImageResponse(
     (
@@ -178,10 +178,10 @@ export async function GET(
                 color: "#141410",
               }}
             >
-              {flagCount}
+              {claimCount}
             </span>
             <span style={{ fontSize: "16px", color: "#6B6860" }}>
-              credibility {flagCount === 1 ? "flag" : "flags"}
+              {claimCount === 1 ? "claim" : "claims"} analysed
             </span>
           </div>
         </div>

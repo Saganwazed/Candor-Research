@@ -1127,3 +1127,332 @@ textarea.input-field {
     flex: 1;
   }
 }
+
+/* ---- Claim Graph ---- */
+
+.graph-section-intro {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.claim-graph-wrapper {
+  margin-top: 4px;
+}
+
+.claim-graph-headers {
+  display: flex;
+  justify-content: space-around;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  margin-bottom: 6px;
+  padding: 0 12px;
+}
+
+.claim-graph-svg {
+  display: block;
+  width: 100%;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  background: var(--color-bg-surface);
+}
+
+/* Dark mode node fills */
+[data-theme="dark"] .claim-graph-svg rect[fill="#141410"] {
+  fill: #E8E6E0;
+}
+
+/* Legend */
+.claim-graph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+}
+
+.graph-legend-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-subtle);
+}
+
+.graph-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-secondary);
+}
+
+.graph-legend-item::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.graph-legend-source::before {
+  background: var(--color-bg-inverse);
+  border: 1px solid var(--color-bg-inverse);
+}
+
+.graph-legend-claim::before {
+  background: #FFF7ED;
+  border: 1px solid #C2410C;
+}
+
+.graph-legend-entity::before {
+  background: #EEF2FF;
+  border: 1px solid #4338CA;
+}
+
+.graph-legend-edge {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.graph-legend-edge::before {
+  content: "—";
+  font-weight: 700;
+}
+
+.graph-legend-edge--green { color: #16A34A; }
+.graph-legend-edge--red   { color: #DC2626; }
+.graph-legend-edge--amber { color: #D97706; }
+
+/* Node index (full labels) */
+.claim-graph-index {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.graph-index-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.graph-index-badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  padding: 2px 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.graph-index-badge--source {
+  background: var(--color-bg-inverse);
+  color: var(--color-text-inverse);
+}
+
+.graph-index-badge--claim {
+  background: #FFF7ED;
+  color: #7C2D12;
+  border: 1px solid rgba(194, 65, 12, 0.3);
+}
+
+.graph-index-badge--entity {
+  background: #EEF2FF;
+  color: #312E81;
+  border: 1px solid rgba(67, 56, 202, 0.3);
+}
+
+.graph-index-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Dark mode legend overrides */
+[data-theme="dark"] .graph-legend-source::before {
+  background: var(--color-text-primary);
+  border-color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .graph-index-badge--source {
+  background: var(--color-text-primary);
+  color: var(--color-bg-base);
+}
+
+/* ---- Claim Verdicts ---- */
+
+.verdicts-intro {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.verdicts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.verdict-card {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 4px;
+  padding: 20px;
+  background: var(--color-bg-surface);
+}
+
+.verdict-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.verdict-node-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  background: var(--color-bg-inset);
+  padding: 2px 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.verdict-chip {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: 2px;
+}
+
+.verdict-chip--supported {
+  background: #F0FDF4;
+  color: #166534;
+  border: 1px solid rgba(22, 101, 52, 0.25);
+}
+
+.verdict-chip--contradicted {
+  background: var(--color-flag-red-bg);
+  color: var(--color-flag-red);
+  border: 1px solid rgba(185, 28, 28, 0.3);
+}
+
+.verdict-chip--unverifiable {
+  background: var(--color-bg-inset);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-strong);
+}
+
+.verdict-chip--misleading {
+  background: var(--color-flag-amber-bg);
+  color: var(--color-flag-amber);
+  border: 1px solid rgba(180, 83, 9, 0.3);
+}
+
+[data-theme="dark"] .verdict-chip--supported {
+  background: #052e16;
+  color: #86efac;
+  border-color: rgba(134, 239, 172, 0.2);
+}
+
+.verdict-claim-text {
+  font-family: var(--font-serif);
+  font-size: var(--text-base);
+  font-style: italic;
+  color: var(--color-text-primary);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+.verdict-assessments {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.verdict-assessment {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.verdict-assessment-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.verdict-assessment-text {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+/* ---- Graph Report ---- */
+
+.graph-report-bias-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.graph-report-bias-label {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+.graph-report-bias-value {
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text-primary);
+  line-height: 1.2;
+}
+
+.graph-report-bias-note {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
+.graph-report-body {
+  border-left: 3px solid var(--color-border-strong);
+  padding-left: 16px;
+  margin-top: 16px;
+}
+
+.graph-report-text {
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--color-text-primary);
+  line-height: 1.75;
+}

@@ -3,9 +3,11 @@
 import { useState, useEffect, useRef } from "react";
 
 const LABELS = [
-  "Reading the article\u2026",
-  "Checking for bias signals\u2026",
-  "Writing your report\u2026",
+  "Reading the article…",
+  "Extracting claims and sources…",
+  "Building claim graph…",
+  "Reasoning over evidence…",
+  "Writing analysis report…",
 ];
 
 const CYCLE_INTERVAL = 2000;
@@ -25,7 +27,7 @@ export default function LoadingState({ customMessage }: LoadingStateProps) {
       setTimeout(() => {
         setCurrentIndex((prev) => (prev + 1) % LABELS.length);
         setIsFading(false);
-      }, 200); // match the CSS cross-fade duration
+      }, 200);
     }, CYCLE_INTERVAL);
 
     return () => {

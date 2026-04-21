@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { AnalysisResponse } from "@/lib/schema";
+import type { GraphAnalysisResponse } from "@/lib/schema";
 import InputSection from "@/components/InputSection";
 import LoadingState from "@/components/LoadingState";
 import ReportSection from "@/components/ReportSection";
@@ -13,7 +13,7 @@ import { useAnalyticsEvents } from "@/lib/posthog-events";
 
 export default function Home() {
   const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
-  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
+  const [analysis, setAnalysis] = useState<GraphAnalysisResponse | null>(null);
   const [error, setError] = useState("");
 
   // Share state

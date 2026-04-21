@@ -1,14 +1,14 @@
 "use client";
 
-import type { AnalysisResponse } from "@/lib/schema";
-import BiasDirection from "./BiasDirection";
-import CredibilityFlags from "./CredibilityFlags";
-import HiddenAgenda from "./HiddenAgenda";
+import type { GraphAnalysisResponse } from "@/lib/schema";
+import ClaimGraph from "./ClaimGraph";
+import ClaimVerdicts from "./ClaimVerdicts";
+import GraphReport from "./GraphReport";
 import FeedbackBar from "./FeedbackBar";
 import ShareButton from "./ShareButton";
 
 interface ReportSectionProps {
-  analysis: AnalysisResponse;
+  analysis: GraphAnalysisResponse;
   onShare: () => void;
   isSharing: boolean;
   hasShared: boolean;
@@ -35,16 +35,31 @@ export default function ReportSection({
 
   return (
     <div className="report" id="report">
+      {/* Summary headline */}
       <div className="bias-summary report-reveal" id="section-bias-summary">
         <p className="bias-summary-text">{analysis.bias_summary}</p>
       </div>
-      <BiasDirection
-        direction={analysis.bias_direction}
-        justification={analysis.bias_justification}
-      />
-      <CredibilityFlags flags={analysis.credibility_flags} />
-      <HiddenAgenda agenda={analysis.hidden_agenda} />
 
+      {/* Claim graph */}
+      <div className="report-section report-reveal report-reveal-delay-1" id="section-claim-graph">
+        <h2 className="section-heading">Claim graph</h2>
+        <p className="graph-section-intro">
+          Sources, claims, and entities extracted from the article — mapped with
+          their logical relationships.
+        </p>
+        <ClaimGraph nodes={analysis.nodes} edges={analysis.edges} />
+      </div>
+
+      {/* Per-claim verdicts */}
+      <ClaimVerdicts verdicts={analysis.claim_verdicts} />
+
+      {/* Narrative report + bias direction */}
+      <GraphReport
+        assessment={analysis.overall_assessment}
+        biasDirection={analysis.bias_direction}
+      />
+
+      {/* Actions */}
       <div className="report-reveal report-reveal-delay-4">
         <div className="report-actions-row">
           <FeedbackBar />
@@ -54,8 +69,6 @@ export default function ReportSection({
             hasShared={hasShared}
           />
         </div>
-
-        {/* Persistent disclaimer on every report per R4 */}
         <div className="disclaimer">
           <p className="disclaimer-text">
             AI analysis — use as a starting point, not a verdict.

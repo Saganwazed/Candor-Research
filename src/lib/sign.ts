@@ -1,10 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
-import type { AnalysisResponse } from "./schema";
+import type { GraphAnalysisResponse } from "./schema";
 
-/**
- * SHARE_SECRET must be a dedicated, high-entropy secret (min 32 random bytes).
- * No fallback to API keys or hardcoded strings — fail hard if missing.
- */
 function getSecret(): string {
   const secret = process.env.SHARE_SECRET;
   if (!secret) {
@@ -16,13 +12,13 @@ function getSecret(): string {
   return secret;
 }
 
-export function signAnalysis(analysis: AnalysisResponse): string {
+export function signAnalysis(analysis: GraphAnalysisResponse): string {
   return createHmac("sha256", getSecret())
     .update(JSON.stringify(analysis))
     .digest("hex");
 }
 
-export function verifyAnalysis(analysis: AnalysisResponse, token: string): boolean {
+export function verifyAnalysis(analysis: GraphAnalysisResponse, token: string): boolean {
   const expected = signAnalysis(analysis);
   if (expected.length !== token.length) return false;
   try {
