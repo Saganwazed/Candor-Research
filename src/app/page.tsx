@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { AnalysisResponse } from "@/lib/schema";
+import type { ClaimVerificationReport } from "@/lib/claim-verification-schema";
 import InputSection from "@/components/InputSection";
 import LoadingState from "@/components/LoadingState";
 import ReportSection from "@/components/ReportSection";
@@ -9,12 +10,22 @@ import Disclaimer from "@/components/Disclaimer";
 import ThemeToggle from "@/components/ThemeToggle";
 import ShareModal from "@/components/ShareModal";
 import ExtensionBanner from "@/components/ExtensionBanner";
+import ClaimVerificationReport from "@/components/ClaimVerificationReport";
 import { useAnalyticsEvents } from "@/lib/posthog-events";
 
 export default function Home() {
   const [fetchStatus, setFetchStatus] = useState<"" | "fetching" | "analyzing">("");
   const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null);
   const [error, setError] = useState("");
+
+  // Claim verification state
+  const [claimVerificationReport, setClaimVerificationReport] =
+    useState<ClaimVerificationReport | null>(null);
+  const [verificationStatus, setVerificationStatus] = useState<
+    "" | "verifying"
+  >("");
+  const [verificationError, setVerificationError] = useState("");
+  const [lastArticleText, setLastArticleText] = useState<string | null>(null);
 
   // Share state
   const [isSharing, setIsSharing] = useState(false);
@@ -43,6 +54,9 @@ export default function Home() {
     setAnalysisToken(null);
     setLastSourceUrl(mode === "url" ? value : null);
     setLastArticleTitle(null);
+    setClaimVerificationReport(null);
+    setVerificationError("");
+    setLastArticleText(null);
 
     try {
       let articleText = value;
@@ -88,6 +102,7 @@ export default function Home() {
 
       setAnalysis(data.analysis);
       setAnalysisToken(data.token ?? null);
+      setLastArticleText(articleText);
 
       // Track successful analysis
       trackAnalysis(mode, data.analysis?.bias_direction);
@@ -182,6 +197,36 @@ export default function Home() {
     setShareIsPublic(isPublic);
   }
 
+  async function handleVerifyClaims() {
+    if (!lastArticleText) return;
+
+    setVerificationStatus("verifying");
+    setVerificationError("");
+    setClaimVerificationReport(null);
+
+    try {
+      const response = await fetch("/api/verify-claims", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: lastArticleText }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const errorMsg = data.error || "Could not verify claims. Try again.";
+        setVerificationError(errorMsg);
+        return;
+      }
+
+      setClaimVerificationReport(data.report);
+    } catch {
+      setVerificationError("Could not connect to the server. Try again.");
+    } finally {
+      setVerificationStatus("");
+    }
+  }
+
   return (
     <main className="page-container">
       <ThemeToggle />
@@ -220,6 +265,38 @@ export default function Home() {
           isSharing={isSharing}
           hasShared={shareData !== null}
         />
+      )}
+
+      {/* Claim Verification */}
+      {analysis && fetchStatus === "" && (
+        <div className="mt-6">
+          {!claimVerificationReport && verificationStatus === "" && (
+            <button
+              onClick={handleVerifyClaims}
+              className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
+            >
+              Verify claims in this article
+            </button>
+          )}
+
+          {verificationStatus === "verifying" && (
+            <LoadingState customMessage="Verifying claims…" />
+          )}
+
+          {verificationError && verificationStatus === "" && (
+            <div
+              className="error-message"
+              role="alert"
+              style={{ marginTop: "24px" }}
+            >
+              {verificationError}
+            </div>
+          )}
+
+          {claimVerificationReport && verificationStatus === "" && (
+            <ClaimVerificationReport report={claimVerificationReport} />
+          )}
+        </div>
       )}
 
       {/* Extension Banner */}
