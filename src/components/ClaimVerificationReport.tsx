@@ -1,6 +1,6 @@
 "use client";
 
-import { ClaimVerificationReport } from "@/lib/claim-verification-schema";
+import type { ClaimVerificationReport } from "@/lib/claim-verification-schema";
 import ClaimCard from "./ClaimCard";
 import ClaimConflicts from "./ClaimConflicts";
 import ClaimGraphVisualization from "./ClaimGraphVisualization";

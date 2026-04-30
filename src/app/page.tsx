@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { AnalysisResponse } from "@/lib/schema";
-import type { ClaimVerificationReport } from "@/lib/claim-verification-schema";
+import type { ClaimVerificationReport as ClaimVerificationReportType } from "@/lib/claim-verification-schema";
 import InputSection from "@/components/InputSection";
 import LoadingState from "@/components/LoadingState";
 import ReportSection from "@/components/ReportSection";
@@ -20,7 +20,7 @@ export default function Home() {
 
   // Claim verification state
   const [claimVerificationReport, setClaimVerificationReport] =
-    useState<ClaimVerificationReport | null>(null);
+    useState<ClaimVerificationReportType | null>(null);
   const [verificationStatus, setVerificationStatus] = useState<
     "" | "verifying"
   >("");
